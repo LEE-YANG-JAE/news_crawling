@@ -5,7 +5,7 @@
 ##### 윈도우 기반
 - 파이썬: 3.12
 ```python
-# selenium 필요요
+# selenium 필요
 pip install selenium
 ```
 - 크롬 드라이버: 129.0.6668.58
