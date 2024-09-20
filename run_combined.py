@@ -1,13 +1,12 @@
-
 import os
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 import datetime
 import time
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 
 # Specify the path to your WebDriver
 service = Service('./chromedriver.exe')
@@ -60,48 +59,46 @@ try:
                 # Wait for the page to load (adjust time if necessary)
                 time.sleep(2)
 
-                # After clicking the tab, find and click "헤드라인 더보기" (Headline More)
                 try:
+                    # Attempt to find and click "헤드라인 더보기" (Headline More) button
                     more_button = driver.find_element(By.LINK_TEXT, "헤드라인 더보기")
                     more_button.click()
 
                     # Wait for the page to load after clicking
                     time.sleep(2)
 
-                    # Find the section with class "section_component as_section_headline"
-                    headlines_section = driver.find_element(By.CLASS_NAME, "section_component.as_section_headline")
-
-                    # Find all headline titles, press names, summaries, and URLs within this section
-                    headlines = headlines_section.find_elements(By.CLASS_NAME, "sa_text_strong")
-                    presses = headlines_section.find_elements(By.CLASS_NAME, "sa_text_press")
-                    titles = headlines_section.find_elements(By.CLASS_NAME, "sa_text_title")
-                    summaries = headlines_section.find_elements(By.CLASS_NAME, "sa_text_lede")
-
-                    # Write the tab name as a section header in the file
-                    file.write(f"=== {tab} ===\n")
-
-                    # Write out each headline, its corresponding press name, and summary into the file
-                    for headline, press, title, summary in zip(headlines, presses, titles, summaries):
-                        news_url = title.get_attribute('data-imp-url')
-                        summary_text = summary.text.strip()
-
-                        # Truncate the summary to 50 characters and add "..." if necessary
-                        if len(summary_text) > 50:
-                            summary_text = summary_text[:50] + "..."
-
-                        file.write(f"제목: {headline.text}\n내용: {summary_text}\n언론사: {press.text}\n링크: {news_url}\n\n")
-
-                    # Add a separator between sections
-                    file.write("\n" + "=" * 50 + "\n\n")
-
                 except NoSuchElementException:
-                    file.write(f"Could not retrieve '헤드라인 더보기' for {tab} section.\n\n")
+                    # If the "헤드라인 더보기" button is not found, continue without clicking
+                    pass
+
+                # Find the section with class "section_component as_section_headline"
+                headlines_section = driver.find_element(By.CLASS_NAME, "section_component.as_section_headline")
+
+                # Find all headline titles, press names, summaries, and URLs within this section
+                headlines = headlines_section.find_elements(By.CLASS_NAME, "sa_text_strong")
+                presses = headlines_section.find_elements(By.CLASS_NAME, "sa_text_press")
+                titles = headlines_section.find_elements(By.CLASS_NAME, "sa_text_title")
+                summaries = headlines_section.find_elements(By.CLASS_NAME, "sa_text_lede")
+
+                # Write the tab name as a section header in the file
+                file.write(f"=== {tab} ===\n")
+
+                # Write out each headline, its corresponding press name, and summary into the file
+                for headline, press, title, summary in zip(headlines, presses, titles, summaries):
+                    news_url = title.get_attribute('data-imp-url')
+                    summary_text = summary.text.strip()
+
+                    # Truncate the summary to 50 characters and add "..." if necessary
+                    if len(summary_text) > 50:
+                        summary_text = summary_text[:50] + "..."
+
+                    file.write(f"제목: {headline.text}\n내용: {summary_text}\n언론사: {press.text}\n링크: {news_url}\n\n")
+
+                # Add a separator between sections
+                file.write("\n" + "=" * 50 + "\n\n")
 
             except NoSuchElementException:
                 file.write(f"Could not access {tab} section.\n\n")
-
-    # Save and close the headline file
-    print(f"Headline file saved at: {headline_file_path}")
 
 except WebDriverException as e:
     print(f"An error occurred with the WebDriver: {e}")
