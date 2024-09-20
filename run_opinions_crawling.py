@@ -100,7 +100,7 @@ if opinion_file_path and editorial_urls:
                 ).text
 
                 # Write the press name, editorial title, and content to the file
-                file.write(f"언론사: {press_name}\n사설 제목: {editorial_title}\n링크: {url}\n내용:\n{article_body}\n\n")
+                file.write(f"언론사: {press_name}\n사설 제목: {editorial_title}\n링크: {url}\n\n내용:\n{article_body}\n\n")
                 file.write("=" * 50 + "\n\n")
 
                 # Pause for 2 seconds after processing each URL
