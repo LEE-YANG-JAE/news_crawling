@@ -4,7 +4,7 @@
 #### 환경
 ##### 윈도우 기반
 - 파이썬: 3.12
-```python
+```batch
 # selenium 필요
 pip install selenium
 ```
