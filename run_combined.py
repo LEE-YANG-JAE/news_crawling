@@ -1,4 +1,5 @@
 import os
+import sys
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -8,10 +9,16 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 import datetime
 import time
 
-# Specify the path to your WebDriver
-service = Service('./chromedriver.exe')
+if getattr(sys, 'frozen', False):
+    # PyInstaller로 빌드된 실행 파일인 경우
+    # noinspection PyProtectedMember
+    chromedriver_path = os.path.join(sys._MEIPASS, "chromedriver.exe")
+else:
+    # 개발 환경에서 실행하는 경우
+    chromedriver_path = "./chromedriver.exe"
 
 # Initialize the WebDriver using the Service object
+service = Service(chromedriver_path)
 driver = webdriver.Chrome(service=service)
 
 # Get today's date and format it as a string (e.g., "2024-09-20")
