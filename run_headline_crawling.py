@@ -9,6 +9,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 import datetime
 import time
 
+
 def main():
     if getattr(sys, 'frozen', False):
         # PyInstaller로 빌드된 실행 파일인 경우
@@ -41,6 +42,7 @@ def main():
 
     # Store collected headline data
     headline_data = []
+    processed_tabs = set()  # To keep track of processed tabs
 
     # Headline Crawling
     try:
@@ -55,6 +57,9 @@ def main():
 
             # Loop through each tab and click
             for tab in tabs:
+                if tab in processed_tabs:
+                    continue  # Skip processing if the tab has already been processed
+
                 try:
                     # Find the tab element by its text and click it
                     tab_element = driver.find_element(By.LINK_TEXT, tab)
@@ -102,12 +107,23 @@ def main():
                             "url": news_url
                         })
 
+                    # Mark the tab as processed
+                    processed_tabs.add(tab)
+
                 except NoSuchElementException:
                     file.write(f"Could not access {tab} section.\n\n")
+
+            # Keep track of which tabs have been written
+            written_tabs = set()
 
             # Process each collected headline URL to extract additional information
             for data in headline_data:
                 try:
+                    # Write the tab name only once
+                    if data['tab'] not in written_tabs:
+                        file.write(f"=== {data['tab']} ===\n\n")
+                        written_tabs.add(data['tab'])
+
                     # Navigate to the headline URL to get the publication date
                     driver.get(data["url"])
 
@@ -121,7 +137,6 @@ def main():
                         modified_date = None
 
                     # Write the details to the file
-                    file.write(f"=== {data['tab']} ===\n")
                     file.write(f"제목: {data['headline']}\n내용: {data['summary']}\n언론사: {data['press']}\n")
                     file.write(f"작성일: {published_date}\n")
                     if modified_date:
@@ -139,12 +154,14 @@ def main():
     except WebDriverException as e:
         print(f"An error occurred with the WebDriver: {e}")
 
-    # Close the browser
-    driver.quit()
+    finally:
+        # Ensure the browser is closed even if an error occurs
+        driver.quit()
 
     # Confirm the file has been saved
     if headline_file_path:
         print(f"Headline file saved at: {headline_file_path}")
+
 
 if __name__ == "__main__":
     main()
