@@ -26,7 +26,7 @@ pip install pyinstaller
 
 ```batch
 # pyinstaller 필요
-pyinstaller --onefile --add-data "./chromedriver.exe;." --name "기사 헤드라인 및 사설 수집" .\run_combined.py
+pyinstaller run_combined.spec
 ```
 - 위 명령어를 실행 후 프로젝트 경로의 dist 폴더에 '기사 헤드라인 및 사설 수집.exe' 파일이 생성
 
