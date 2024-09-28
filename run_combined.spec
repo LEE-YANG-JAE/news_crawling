@@ -1,6 +1,16 @@
 # run_combined.spec
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
+# Path to the executable
+exe_file_path = os.path.join('dist', '기사 헤드라인 및 사설 수집.exe')
+
+# Check if the exe file exists and delete it
+if os.path.exists(exe_file_path):
+    print(f"Deleting existing executable: {exe_file_path}")
+    os.remove(exe_file_path)
+
 block_cipher = None
 
 a = Analysis(
