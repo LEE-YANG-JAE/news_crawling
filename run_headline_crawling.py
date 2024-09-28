@@ -3,7 +3,7 @@ import sys
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
+from selenium.common.exceptions import (NoSuchElementException, TimeoutException, WebDriverException)
 import datetime
 import time
 
@@ -36,11 +36,11 @@ def main():
     os.makedirs(directory, exist_ok=True)
 
     # Define the file path
-    headline_file_path = os.path.join(directory, f'{today}_헤드라인 모음.txt')
+    headline_file_path = os.path.join(directory, f'{today}_헤드라인_모음.txt')
 
-    # Store collected headline data
+    # Store collected headline data and section names for the index
     headline_data = []
-    processed_tabs = set()  # To keep track of processed tabs
+    section_names = []
 
     # Headline Crawling
     try:
@@ -53,11 +53,7 @@ def main():
         with open(headline_file_path, 'w', encoding='utf-8') as file:
             file.write(f"=== {today} 헤드라인 모음 ===\n\n\n")
 
-            # Loop through each tab and click
             for tab in tabs:
-                if tab in processed_tabs:
-                    continue  # Skip processing if the tab has already been processed
-
                 try:
                     # Find the tab element by its text and click it
                     tab_element = driver.find_element(By.LINK_TEXT, tab)
@@ -65,6 +61,9 @@ def main():
 
                     # Wait for the page to load (adjust time if necessary)
                     time.sleep(2)
+
+                    # Add the section name to the section_names list for the index
+                    section_names.append(tab)
 
                     try:
                         # Attempt to find and click "헤드라인 더보기" (Headline More) button
@@ -87,7 +86,6 @@ def main():
                     titles = headlines_section.find_elements(By.CLASS_NAME, "sa_text_title")
                     summaries = headlines_section.find_elements(By.CLASS_NAME, "sa_text_lede")
 
-                    # Collect data for each headline
                     for headline, press, title, summary in zip(headlines, presses, titles, summaries):
                         news_url = title.get_attribute('data-imp-url')
                         summary_text = summary.text.strip()
@@ -105,23 +103,23 @@ def main():
                             "url": news_url
                         })
 
-                    # Mark the tab as processed
-                    processed_tabs.add(tab)
-
                 except NoSuchElementException:
                     file.write(f"Could not access {tab} section.\n\n")
 
-            # Keep track of which tabs have been written
-            written_tabs = set()
+            # Write the index to the file
+            file.write("목차:\n")
+            for idx, section_name in enumerate(section_names, 1):
+                file.write(f"{idx}. === {section_name} ===\n")
+            file.write("\n\n")
 
             # Process each collected headline URL to extract additional information
+            current_tab = None
             for data in headline_data:
-                try:
-                    # Write the tab name only once
-                    if data['tab'] not in written_tabs:
-                        file.write(f"=== {data['tab']} ===\n\n")
-                        written_tabs.add(data['tab'])
+                if current_tab != data['tab']:
+                    current_tab = data['tab']
+                    file.write(f"=== {current_tab} ===\n\n")
 
+                try:
                     # Navigate to the headline URL to get the publication date
                     driver.get(data["url"])
 
@@ -140,8 +138,6 @@ def main():
                     if modified_date:
                         file.write(f"수정일: {modified_date}\n")
                     file.write(f"링크: {data['url']}\n\n")
-
-                    # Add a separator between articles
                     file.write("=" * 50 + "\n\n")
 
                 except NoSuchElementException:
@@ -152,9 +148,8 @@ def main():
     except WebDriverException as e:
         print(f"An error occurred with the WebDriver: {e}")
 
-    finally:
-        # Ensure the browser is closed even if an error occurs
-        driver.quit()
+    # Close the browser
+    driver.quit()
 
     # Confirm the file has been saved
     if headline_file_path:

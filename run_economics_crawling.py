@@ -113,8 +113,8 @@ def main():
                 # Find all section_article within 'section_latest_article'
                 section_articles = latest_section.find_elements(By.CLASS_NAME, "section_article")
 
-                # Loop through only 2 section_article elements
-                for section_article in section_articles[:2]:
+                # Loop through up to 4 section_article elements
+                for section_article in section_articles[:4]:
                     try:
                         # Re-locate the section_article and its sa_list to avoid stale element reference
                         sa_list = section_article.find_element(By.CLASS_NAME, "sa_list")
