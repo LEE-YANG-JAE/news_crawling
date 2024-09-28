@@ -135,8 +135,8 @@ def main():
                                 press_name = press_element.text.strip()
 
                                 # Truncate the summary to 50 characters and add "..." if necessary
-                                if len(summary_text) > 50:
-                                    summary_text = summary_text[:50] + "..."
+                                if len(summary_text) > 70:
+                                    summary_text = summary_text[:70] + "..."
 
                                 # Check if a similar article or the same URL already exists
                                 duplicate_found = False

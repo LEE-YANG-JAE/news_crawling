@@ -91,8 +91,8 @@ def main():
                         summary_text = summary.text.strip()
 
                         # Truncate the summary to 50 characters and add "..." if necessary
-                        if len(summary_text) > 50:
-                            summary_text = summary_text[:50] + "..."
+                        if len(summary_text) > 70:
+                            summary_text = summary_text[:70] + "..."
 
                         # Store the collected data
                         headline_data.append({
