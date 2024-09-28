@@ -9,6 +9,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 import datetime
 import time
 
+
 def main():
     if getattr(sys, 'frozen', False):
         # PyInstaller로 빌드된 실행 파일인 경우
@@ -139,6 +140,7 @@ def main():
     # Confirm the file has been saved
     if opinion_file_path:
         print(f"Opinion file saved at: {opinion_file_path}")
+
 
 if __name__ == "__main__":
     main()

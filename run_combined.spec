@@ -7,7 +7,7 @@ a = Analysis(
     ['run_combined.py'],
     pathex=[],
     binaries=[('chromedriver.exe', '.')],
-    datas=[('run_headline_crawling.py', '.'), ('run_opinions_crawling.py', '.')],
+    datas=[('run_headline_crawling.py', '.'), ('run_economics_crawling.py', '.'), ('run_opinions_crawling.py', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
