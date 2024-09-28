@@ -39,7 +39,7 @@ def main():
             try:
                 table = news_item.find_element(By.TAG_NAME, 'table')
                 tbody = table.find_element(By.TAG_NAME, 'tbody')
-                rows = tbody.find_elements(By.TAG_NAME, 'tr')[:30]  # Limit to 30 rows
+                rows = tbody.find_elements(By.TAG_NAME, 'tr')
 
                 # Extract data from each row
                 for row in rows:
@@ -136,13 +136,13 @@ def main():
 
     # Save the collected data to a text file
     with open(file_path, 'w', encoding='utf-8') as file:
-        file.write(f"=== {today} Latest 30 Stock News ===\n\n\n")
+        file.write(f"=== {today} Latest Stock News ===\n\n\n")
         for data in news_data:
             file.write(f"Title: {data['title']}\n")
-            file.write(f"Press: {data['press']}\n")
-            file.write(f"Labels: {data['label']}\n")
-            file.write(f"Date: {data['time']}\n")
+            file.write(f"Stock Label: {data['label']}\n")
             file.write(f"Content: {data['body']}\n")
+            file.write(f"Press: {data['press']}\n")
+            file.write(f"Date: {data['time']}\n")
             file.write(f"Link: {data['url']}\n\n")
             file.write("=" * 50 + "\n\n")
 
