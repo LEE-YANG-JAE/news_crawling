@@ -48,25 +48,31 @@ def main():
                         news_badges_container = news_link_cell.find_element(By.CLASS_NAME, 'news-badges-container')
                         anchors = news_badges_container.find_elements(By.TAG_NAME, 'a')
 
-                        # Collect data
-                        if len(anchors) > 0:
-                            news_url = anchors[0].get_attribute('href')
-                            news_title = anchors[0].text.strip()
-                            stock_label = anchors[1].find_element(By.TAG_NAME, 'span').text.strip()
+                        # Collect stock-news-label data
+                        labels = []
+                        for anchor in anchors:
+                            if 'stock-news-label' in anchor.get_attribute('class'):
+                                labels.append(anchor.text.strip())
 
-                            # Collect press name
-                            press_element = news_link_cell.find_element(By.CLASS_NAME, 'news_date-cell')
-                            press_name = press_element.text.strip()
+                        labels_text = ', '.join(labels) if labels else 'No Labels'
 
-                            # Store collected data
-                            news_data.append({
-                                'title': news_title,
-                                'url': news_url,
-                                'label': stock_label,
-                                'press': press_name,
-                                'time': '',
-                                'body': ''
-                            })
+                        # Collect title and URL
+                        news_url = news_link_cell.find_element(By.CLASS_NAME, 'nn-tab-link').get_attribute('href')
+                        news_title = news_link_cell.find_element(By.CLASS_NAME, 'nn-tab-link').text.strip()
+
+                        # Collect press name
+                        press_element = news_link_cell.find_element(By.CLASS_NAME, 'news_date-cell')
+                        press_name = press_element.text.strip()
+
+                        # Store collected data
+                        news_data.append({
+                            'title': news_title,
+                            'url': news_url,
+                            'label': labels_text,
+                            'press': press_name,
+                            'time': '',
+                            'body': ''
+                        })
 
                     except NoSuchElementException:
                         continue
@@ -79,6 +85,7 @@ def main():
     except WebDriverException as e:
         print(f"An error occurred with the WebDriver: {e}")
 
+    # Now iterate over the collected news data to process the URLs
     for data in news_data:
         if 'finance.yahoo.com' in data['url']:
             driver.get(data['url'])
@@ -133,7 +140,7 @@ def main():
         for data in news_data:
             file.write(f"Title: {data['title']}\n")
             file.write(f"Press: {data['press']}\n")
-            file.write(f"Label: {data['label']}\n")
+            file.write(f"Labels: {data['label']}\n")
             file.write(f"Date: {data['time']}\n")
             file.write(f"Content: {data['body']}\n")
             file.write(f"Link: {data['url']}\n\n")
