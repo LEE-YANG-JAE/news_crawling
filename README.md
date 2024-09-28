@@ -1,5 +1,5 @@
 
-## 네이버 뉴스 크롤링
+## 뉴스 크롤링
 
 #### 환경
 ##### 윈도우 기반
@@ -17,10 +17,16 @@ pip install pyinstaller
 1. run_headline_crawling.py : 네이버 헤드라인 뉴스들 가져오기기
 - C:\news\headlines\연\월\연-월-일_헤드라인 모음.txt 로 저장
 
-2. run_opinions_crawling.py : 네이버 칼럼 특정 사설 위주로 가져오기
+2. run_opinions_crawling.py : 네이버 칼럼 특정 사설 위주로 가져 오기
 - C:\news\opinions\연\월\연-월-_사설 모음.txt 로 저장
+- 
+3. run_economics_crawling.py : 네이버 경제 영역별 뉴스로 가져 오기
+- C:\news\economics\연\월\연-월-_경제_영역별_뉴스_모음.txt 로 저장
 
-3. run_combined.py : run_headline_crawling + run_opinions_crawling
+4. run_eng_stock_check.py : inviz.com 주식의 최신 뉴스 30개로 가져 오기
+- C:\news\stock_news\연\월\연-월-_Stock_News.txt 로 저장
+
+5. run_combined.py : run_headline_crawling + run_opinions_crawling + run_economics_crawling + run_eng_stock_check
 
 #### 실행파일 만들기
 

@@ -1,6 +1,7 @@
 import run_headline_crawling
 import run_economics_crawling
 import run_opinions_crawling
+import run_eng_stock_check
 
 
 def main():
@@ -14,6 +15,9 @@ def main():
 
     # Run opinions crawling
     run_opinions_crawling.main()
+
+    # Run eng stock news crawling
+    run_eng_stock_check.main()
 
     print("Finished combined execution.")
 
