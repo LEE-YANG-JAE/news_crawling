@@ -44,7 +44,7 @@ def main():
     os.makedirs(directory, exist_ok=True)
 
     # Define the file path
-    economics_file_path = os.path.join(directory, f'{today}_경제_뉴스_모음.txt')
+    economics_file_path = os.path.join(directory, f'{today}_경제_영역별_뉴스_모음.txt')
 
     # Store collected section and article data
     all_section_data = []
@@ -183,7 +183,7 @@ def main():
     # Writing Data to File
     try:
         with open(economics_file_path, 'w', encoding='utf-8') as file:
-            file.write(f"=== {today} 경제 뉴스 모음 ===\n\n\n")
+            file.write(f"=== {today} _경제 영역별 뉴스 모음 ===\n\n\n")
 
             # 목차 추가
             file.write("목차:\n")
