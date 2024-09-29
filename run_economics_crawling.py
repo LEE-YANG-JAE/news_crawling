@@ -183,7 +183,7 @@ def main():
     # Writing Data to File
     try:
         with open(economics_file_path, 'w', encoding='utf-8') as file:
-            file.write(f"=== {today} _경제 영역별 뉴스 모음 ===\n\n\n")
+            file.write(f"=== {today} 경제 영역별 뉴스 모음 ===\n\n\n")
 
             # 목차 추가
             file.write("목차:\n")
