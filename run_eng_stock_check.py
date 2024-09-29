@@ -39,7 +39,7 @@ def main():
             try:
                 table = news_item.find_element(By.TAG_NAME, 'table')
                 tbody = table.find_element(By.TAG_NAME, 'tbody')
-                rows = tbody.find_elements(By.TAG_NAME, 'tr')
+                rows = tbody.find_elements(By.TAG_NAME, 'tr')[:30]  # Limit to 30 rows
 
                 # Extract data from each row
                 for row in rows:
@@ -52,12 +52,7 @@ def main():
                         if len(anchors) > 0:
                             news_url = anchors[0].get_attribute('href')
                             news_title = anchors[0].text.strip()
-
-                            # Collect stock labels
-                            stock_labels = []
-                            for anchor in anchors[1:]:
-                                if "stock-news-label" in anchor.get_attribute("class"):
-                                    stock_labels.append(anchor.find_element(By.TAG_NAME, 'span').text.strip())
+                            stock_labels = [label.text.strip() for label in news_badges_container.find_elements(By.CLASS_NAME, 'stock-news-label')]
 
                             # Collect press name
                             press_element = news_link_cell.find_element(By.CLASS_NAME, 'news_date-cell')
@@ -108,7 +103,10 @@ def main():
                     first_p_text = paragraphs[1].text.strip()
 
                 # Limit the body text to 300 characters
-                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
+                if len(first_p_text) > 300:
+                    article_body = first_p_text[:300] + "..."
+                else:
+                    article_body = first_p_text
 
                 # Update data
                 data['time'] = article_time
@@ -118,7 +116,7 @@ def main():
                 data['time'] = ''
                 data['body'] = 'Body text not available'
 
-        elif 'prnewswire.co.uk' in data['url'] or 'prnewswire.com' in data['url']:
+        elif 'www.prnewswire.co.uk' in data['url'] or 'www.prnewswire.com' in data['url']:
             driver.get(data['url'])
             time.sleep(1)  # Pause for 1 second
 
@@ -127,12 +125,15 @@ def main():
                 article_time = driver.find_element(By.CLASS_NAME, 'mb-no').text.strip()
 
                 # Collect body text
-                release_body = driver.find_element(By.CLASS_NAME, 'release-body')
-                row_div = release_body.find_element(By.CLASS_NAME, 'row')
+                article_body_div = driver.find_element(By.CLASS_NAME, 'release-body')
+                row_div = article_body_div.find_element(By.CLASS_NAME, 'row')
                 first_p_text = row_div.find_element(By.TAG_NAME, 'p').text.strip()
 
                 # Limit the body text to 300 characters
-                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
+                if len(first_p_text) > 300:
+                    article_body = first_p_text[:300] + "..."
+                else:
+                    article_body = first_p_text
 
                 # Update data
                 data['time'] = article_time
@@ -142,17 +143,20 @@ def main():
                 data['time'] = ''
                 data['body'] = 'Body text not available'
 
-        elif 'businesswire.com' in data['url']:
+        elif 'www.businesswire.com' in data['url']:
             driver.get(data['url'])
             time.sleep(1)  # Pause for 1 second
 
             try:
                 # Collect body text
                 subhead_div = driver.find_element(By.CLASS_NAME, 'bw-release-subhead')
-                first_p_text = subhead_div.find_element(By.XPATH, ".//p[@class='bwalignc']").text.strip()
+                first_p = subhead_div.find_element(By.CLASS_NAME, 'bwalignc').text.strip()
 
                 # Limit the body text to 300 characters
-                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
+                if len(first_p) > 300:
+                    article_body = first_p[:300] + "..."
+                else:
+                    article_body = first_p
 
                 # Update data
                 data['body'] = article_body
@@ -160,20 +164,49 @@ def main():
             except NoSuchElementException:
                 data['body'] = 'Body text not available'
 
-        elif 'globenewswire.com' in data['url']:
+        elif 'www.globenewswire.com' in data['url']:
             driver.get(data['url'])
             time.sleep(1)  # Pause for 1 second
 
             try:
                 # Collect time information
-                article_time = driver.find_element(By.CLASS_NAME, 'article-published').text.strip()
+                article_time = driver.find_element(By.CLASS_NAME, 'article-published-source').text.strip()
 
                 # Collect body text
                 article_body_div = driver.find_element(By.CLASS_NAME, 'article-body')
-                first_p_text = article_body_div.find_element(By.XPATH, ".//p[@align='justify']").text.strip()
+                first_p_text = article_body_div.find_element(By.TAG_NAME, 'p[align="justify"]').text.strip()
 
                 # Limit the body text to 300 characters
-                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
+                if len(first_p_text) > 300:
+                    article_body = first_p_text[:300] + "..."
+                else:
+                    article_body = first_p_text
+
+                # Update data
+                data['time'] = article_time
+                data['body'] = article_body
+
+            except NoSuchElementException:
+                data['time'] = ''
+                data['body'] = 'Body text not available'
+
+        elif 'www.investopedia.com' in data['url']:
+            driver.get(data['url'])
+            time.sleep(1)  # Pause for 1 second
+
+            try:
+                # Collect time information
+                article_time = driver.find_element(By.CLASS_NAME, 'mntl-attribution__item-date').text.strip()
+
+                # Collect body text
+                article_body_div = driver.find_element(By.CLASS_NAME, 'article-body-content')
+                paragraphs = article_body_div.find_elements(By.CLASS_NAME, 'finance-sc-block-html')
+
+                # Extract text from the paragraphs and concatenate
+                article_body = ' '.join([p.text.strip() for p in paragraphs])
+
+                # Limit the body text to 300 characters
+                article_body = article_body[:300] + "..." if len(article_body) > 300 else article_body
 
                 # Update data
                 data['time'] = article_time
@@ -200,7 +233,7 @@ def main():
         for data in news_data:
             file.write(f"Title: {data['title']}\n")
             file.write(f"Press: {data['press']}\n")
-            file.write(f"Label: {', '.join(data['labels'])}\n")
+            file.write(f"Labels: {', '.join(data['labels'])}\n")
             file.write(f"Date: {data['time']}\n")
             file.write(f"Content: {data['body']}\n")
             file.write(f"Link: {data['url']}\n\n")
