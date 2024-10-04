@@ -103,10 +103,7 @@ def main():
                     first_p_text = paragraphs[1].text.strip()
 
                 # Limit the body text to 300 characters
-                if len(first_p_text) > 300:
-                    article_body = first_p_text[:300] + "..."
-                else:
-                    article_body = first_p_text
+                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
 
                 # Update data
                 data['time'] = article_time
@@ -130,10 +127,7 @@ def main():
                 first_p_text = row_div.find_element(By.TAG_NAME, 'p').text.strip()
 
                 # Limit the body text to 300 characters
-                if len(first_p_text) > 300:
-                    article_body = first_p_text[:300] + "..."
-                else:
-                    article_body = first_p_text
+                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
 
                 # Update data
                 data['time'] = article_time
@@ -149,14 +143,11 @@ def main():
 
             try:
                 # Collect body text
-                subhead_div = driver.find_element(By.CLASS_NAME, 'bw-release-subhead')
+                subhead_div = driver.find_element(By.CLASS_NAME, 'bw-release-story')
                 first_p = subhead_div.find_element(By.CLASS_NAME, 'bwalignc').text.strip()
 
                 # Limit the body text to 300 characters
-                if len(first_p) > 300:
-                    article_body = first_p[:300] + "..."
-                else:
-                    article_body = first_p
+                article_body = first_p[:300] + "..." if len(first_p) > 300 else first_p
 
                 # Update data
                 data['body'] = article_body
@@ -174,13 +165,10 @@ def main():
 
                 # Collect body text
                 article_body_div = driver.find_element(By.CLASS_NAME, 'article-body')
-                first_p_text = article_body_div.find_element(By.TAG_NAME, 'p[align="justify"]').text.strip()
+                first_p_text = article_body_div.find_element(By.TAG_NAME, 'p').text.strip()
 
                 # Limit the body text to 300 characters
-                if len(first_p_text) > 300:
-                    article_body = first_p_text[:300] + "..."
-                else:
-                    article_body = first_p_text
+                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
 
                 # Update data
                 data['time'] = article_time
@@ -204,6 +192,29 @@ def main():
 
                 # Extract text from the paragraphs and concatenate
                 article_body = ' '.join([p.text.strip() for p in paragraphs])
+
+                # Limit the body text to 300 characters
+                article_body = article_body[:300] + "..." if len(article_body) > 300 else article_body
+
+                # Update data
+                data['time'] = article_time
+                data['body'] = article_body
+
+            except NoSuchElementException:
+                data['time'] = ''
+                data['body'] = 'Body text not available'
+
+        elif 'www.newsfilecorp.com' in data['url']:
+            driver.get(data['url'])
+            time.sleep(1)  # Pause for 1 second
+
+            try:
+                # Collect time information
+                article_time = driver.find_element(By.ID, 'release').text.strip()
+
+                # Collect body text
+                paragraphs = driver.find_elements(By.TAG_NAME, 'p')
+                article_body = ' '.join([p.text.strip() for p in paragraphs if not p.get_attribute('style')])
 
                 # Limit the body text to 300 characters
                 article_body = article_body[:300] + "..." if len(article_body) > 300 else article_body
