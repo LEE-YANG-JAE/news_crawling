@@ -10,7 +10,9 @@ pip install selenium
 pip install pyinstaller
 ```
 - 크롬 드라이버: 129.0.6668.58
-- 크롬: 129.0.6668.59
+  - 크롬드라이버 다운로드 링크
+    https://googlechromelabs.github.io/chrome-for-testing/#stable
+- 크롬 최신 버전 사용
 
 #### 파이썬 파일
 
