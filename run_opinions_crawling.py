@@ -6,10 +6,11 @@ from selenium.webdriver.support import expected_conditions as ec
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 import datetime
 import time
-
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
 
 def main():
-    driver = webdriver.Chrome()
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
 
     # Get today's date and format it as a string (e.g., "2024-09-20")
     today = datetime.datetime.today().strftime('%Y-%m-%d')

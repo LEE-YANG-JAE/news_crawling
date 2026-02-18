@@ -5,9 +5,7 @@
 ##### 윈도우 기반
 - 파이썬: 3.12 이상
 ```batch
-# selenium 필요
-pip install selenium
-pip install pyinstaller
+pip install selenium webdriver-manager pyinstaller
 ```
 
 #### 파이썬 파일

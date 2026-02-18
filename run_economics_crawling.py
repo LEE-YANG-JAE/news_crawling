@@ -8,6 +8,8 @@ from selenium.common.exceptions import (NoSuchElementException, TimeoutException
 import datetime
 import time
 from difflib import SequenceMatcher
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
 
 
 def are_similar(str1, str2, threshold=0.8):
@@ -15,7 +17,7 @@ def are_similar(str1, str2, threshold=0.8):
 
 
 def main():
-    driver = webdriver.Chrome()
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
 
     # Get today's date and format it as a string (e.g., "2024-09-28")
     today = datetime.datetime.today().strftime('%Y-%m-%d')
