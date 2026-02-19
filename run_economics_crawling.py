@@ -3,7 +3,7 @@
 Selenium/ChromeDriver 없이 동작.
 
 수집 대상: 경제 섹션 내 서브카테고리별 뉴스
-저장 경로: C:\news\economics\{YYYY}\{MM}\{TODAY}_경제_영역별_뉴스_모음.txt
+저장 경로: C:\\news\\economics\\{YYYY}\\{MM}\\{TODAY}_경제_영역별_뉴스_모음.txt
 """
 
 import os
@@ -11,7 +11,7 @@ import datetime
 import time
 from difflib import SequenceMatcher
 
-from http_utils import fetch_soup
+from http_utils import fetch_soup, log
 
 
 def are_similar(str1, str2, threshold=0.8):
@@ -32,7 +32,7 @@ def get_economics_subsections():
 
         nav_section = soup.find(class_="ct_snb_nav")
         if nav_section is None:
-            print("  서브섹션 내비게이션을 찾을 수 없습니다.")
+            log("  ✗ 서브섹션 내비게이션을 찾을 수 없습니다.")
             return subsections
 
         nav_items = nav_section.find_all(class_="ct_snb_nav_item")
@@ -45,10 +45,8 @@ def get_economics_subsections():
                     href = "https://news.naver.com" + href
                 subsections.append({"subsection": text, "url": href})
 
-        print(f"  경제 서브섹션 {len(subsections)}개 발견")
-
     except Exception as e:
-        print(f"  서브섹션 추출 실패: {e}")
+        log(f"  ✗ 서브섹션 추출 실패: {e}")
 
     return subsections
 
@@ -64,16 +62,13 @@ def crawl_subsection_articles(subsection_data):
     try:
         soup = fetch_soup(subsection_data["url"], delay=1)
 
-        # section_latest 영역 내 기사 추출
         latest_section = soup.find(class_="section_latest")
         if latest_section is None:
-            # 대체 클래스 시도
             latest_section = soup.find(class_=lambda c: c and "section_latest" in c)
 
         if latest_section is None:
             return articles
 
-        # section_article 내 sa_item 추출
         section_articles = latest_section.find_all(class_="section_article")
 
         for section_article in section_articles[:4]:
@@ -84,20 +79,17 @@ def crawl_subsection_articles(subsection_data):
             sa_items = sa_list.find_all(class_="sa_item")
             for sa_item in sa_items:
                 try:
-                    # 제목 + URL
                     title_el = sa_item.find(class_="sa_text_title")
                     if title_el is None:
                         continue
                     title = title_el.get_text(strip=True)
                     url = title_el.get("href", "")
 
-                    # 요약
                     lede_el = sa_item.find(class_="sa_text_lede")
                     summary = lede_el.get_text(strip=True) if lede_el else ""
                     if len(summary) > 70:
                         summary = summary[:70] + "..."
 
-                    # 언론사
                     press_el = sa_item.find(class_="sa_text_press")
                     press = press_el.get_text(strip=True) if press_el else ""
 
@@ -112,7 +104,7 @@ def crawl_subsection_articles(subsection_data):
                     continue
 
     except Exception as e:
-        print(f"  [{subsection_data['subsection']}] 기사 수집 실패: {e}")
+        log(f"  [{subsection_data['subsection']}] 기사 수집 실패: {e}")
 
     return articles
 
@@ -144,6 +136,12 @@ def fetch_article_dates(url):
 
 
 def main():
+    """
+    경제 뉴스 크롤링 메인 함수.
+
+    Returns:
+        int: 수집된 총 기사 수
+    """
     today = datetime.datetime.today().strftime('%Y-%m-%d')
     year = datetime.datetime.today().strftime('%Y')
     month = datetime.datetime.today().strftime('%m')
@@ -154,8 +152,6 @@ def main():
 
     economics_file_path = os.path.join(directory, f'{today}_경제_영역별_뉴스_모음.txt')
 
-    print("=== 경제 뉴스 크롤링 시작 ===")
-
     # 1) 서브섹션 목록 수집
     all_section_data = get_economics_subsections()
 
@@ -163,8 +159,8 @@ def main():
     all_article_data = []
     for section_data in all_section_data:
         articles = crawl_subsection_articles(section_data)
+        before = len(all_article_data)
         for article in articles:
-            # 중복 검사
             duplicate = False
             for existing in all_article_data:
                 if are_similar(existing["title"], article["title"]) or existing["url"] == article["url"]:
@@ -172,27 +168,25 @@ def main():
                     break
             if not duplicate:
                 all_article_data.append(article)
+        added = len(all_article_data) - before
 
-        print(f"  [{section_data['subsection']}] {len(articles)}개 기사 수집 (누적: {len(all_article_data)})")
+        log(f"  [{section_data['subsection']:6s}] {added:3d}개 수집")
 
     # 3) 파일 작성
     with open(economics_file_path, 'w', encoding='utf-8') as file:
         file.write(f"=== {today} 경제 영역별 뉴스 모음 ===\n\n\n")
 
-        # 목차
         file.write("목차:\n")
         for idx, sd in enumerate(all_section_data, 1):
             file.write(f"{idx}. === {sd['subsection']} ===\n")
         file.write("\n\n")
 
-        # 기사 상세
         current_subsection = None
         for data in all_article_data:
             if current_subsection != data['subsection']:
                 current_subsection = data['subsection']
                 file.write(f"=== {current_subsection} ===\n\n")
 
-            # 기사 페이지에서 날짜 추출
             published_date, modified_date = None, None
             if data["url"]:
                 published_date, modified_date = fetch_article_dates(data["url"])
@@ -207,8 +201,10 @@ def main():
             file.write(f"링크: {data['url']}\n\n")
             file.write("=" * 50 + "\n\n")
 
-    print(f"Economic news file saved at: {economics_file_path}")
+    log(f"  ✓ 경제 뉴스 {len(all_article_data)}개 → {economics_file_path}")
+    return len(all_article_data)
 
 
 if __name__ == "__main__":
+    log("=== 경제 뉴스 크롤링 시작 ===")
     main()

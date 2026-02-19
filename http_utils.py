@@ -1,12 +1,41 @@
 """
 공통 HTTP 유틸리티 모듈
-모든 크롤링 스크립트에서 공유하는 requests + BeautifulSoup 래퍼.
+모든 크롤링 스크립트에서 공유하는 requests + BeautifulSoup 래퍼 및 로깅.
 Selenium/ChromeDriver 없이 동작.
 """
 
+import sys
 import time
 import requests
 from bs4 import BeautifulSoup
+
+
+# ─────────────────────────────────────────────
+# 로깅 유틸리티
+# ─────────────────────────────────────────────
+
+_log_buffer = []
+
+
+def log(msg=""):
+    """콘솔 출력 + 내부 버퍼에 동시 기록."""
+    # Windows cp949 인코딩 문제 방지
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write((msg + "\n").encode("utf-8", errors="replace"))
+        sys.stdout.buffer.flush()
+    _log_buffer.append(msg)
+
+
+def get_log_buffer():
+    """버퍼에 쌓인 전체 로그를 줄바꿈 문자열로 반환."""
+    return "\n".join(_log_buffer)
+
+
+def clear_log_buffer():
+    """로그 버퍼 초기화."""
+    _log_buffer.clear()
 
 HEADERS = {
     "User-Agent": (

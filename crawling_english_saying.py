@@ -46,7 +46,8 @@ def fetch_latest_quote() -> Optional[Tuple[str, str, str]]:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except Exception as exc:
-        print(f"사이트에 접속할 수 없습니다: {exc}")
+        from http_utils import log
+        log(f"  ✗ 사이트 접속 실패: {exc}")
         return None
 
     # Extract text from HTML
@@ -81,7 +82,8 @@ def fetch_latest_quote() -> Optional[Tuple[str, str, str]]:
     if date and english_quote and korean_quote:
         return date, english_quote, korean_quote
 
-    print("페이지에서 명언 정보를 찾을 수 없습니다.")
+    from http_utils import log
+    log("  ✗ 페이지에서 명언 정보를 찾을 수 없습니다.")
     return None
 
 
@@ -94,16 +96,17 @@ def create_new_file(file_path: str, year: int) -> None:
         year: 연도
     """
     # 바탕화면 디렉토리가 없으면 생성하지 않음 (Desktop은 이미 존재해야 함)
+    from http_utils import log
     desktop_dir = os.path.dirname(file_path)
     if not os.path.isdir(desktop_dir):
-        print(f"바탕화면 경로를 찾을 수 없습니다: {desktop_dir}")
+        log(f"  ✗ 바탕화면 경로를 찾을 수 없습니다: {desktop_dir}")
         return
 
     header = f"{year}년 영어 명언 모음\n\n"
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(header)
 
-    print(f"새 파일을 생성했습니다: {file_path}")
+    log(f"  새 파일 생성: {file_path}")
 
 
 def insert_latest_quote() -> bool:
@@ -124,18 +127,20 @@ def insert_latest_quote() -> bool:
     desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
     file_path = os.path.join(desktop_path, filename)
 
+    from http_utils import log
+
     # 파일이 없으면 자동 생성
     if not os.path.isfile(file_path):
         create_new_file(file_path, year)
         if not os.path.isfile(file_path):
-            print(f"파일을 생성할 수 없습니다: {file_path}")
+            log(f"  ✗ 파일 생성 실패: {file_path}")
             return False
 
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
     if date in content:
-        print(f"{date} 날짜의 내용이 이미 파일에 있습니다.")
+        log(f"  ✓ {date} 명언 이미 존재")
         return True  # 이미 존재하므로 성공으로 처리
 
     lines = content.splitlines()
@@ -151,7 +156,7 @@ def insert_latest_quote() -> bool:
     with open(file_path, "w", encoding="utf-8") as f:
         f.write("\n".join(new_lines))
 
-    print(f"{date} 날짜의 내용을 파일에 추가했습니다.")
+    log(f"  ✓ {date} 명언 추가 완료")
     return True
 
 

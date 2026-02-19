@@ -3,14 +3,14 @@
 Selenium/ChromeDriver 없이 동작.
 
 수집 대상: 경제, IT/과학, 세계, 정치, 사회, 생활/문화
-저장 경로: C:\news\headlines\{YYYY}\{MM}\{TODAY}_헤드라인_모음.txt
+저장 경로: C:\\news\\headlines\\{YYYY}\\{MM}\\{TODAY}_헤드라인_모음.txt
 """
 
 import os
 import datetime
 import time
 
-from http_utils import fetch_soup, HEADERS
+from http_utils import fetch_soup, log
 
 
 # 네이버 뉴스 섹션별 직접 URL (탭 클릭 대체)
@@ -38,36 +38,30 @@ def crawl_section_headlines(section_name, section_url):
         # 헤드라인 섹션 찾기
         headline_section = soup.find("div", class_="section_component as_section_headline")
         if headline_section is None:
-            # 클래스명이 여러 개인 경우 대비
             headline_section = soup.find("div", class_=lambda c: c and "as_section_headline" in c)
 
         if headline_section is None:
-            print(f"  [{section_name}] 헤드라인 섹션을 찾을 수 없습니다.")
+            log(f"  [{section_name}] 헤드라인 섹션을 찾을 수 없습니다.")
             return results
 
         # 각 헤드라인 아이템 추출
         items = headline_section.find_all("div", class_="sa_item")
         if not items:
-            # sa_item이 없으면 sa_text 기반으로 시도
             items = headline_section.find_all("li", class_="sa_item")
 
         for item in items:
             try:
-                # 제목
                 title_el = item.find(class_="sa_text_strong")
                 headline_text = title_el.get_text(strip=True) if title_el else ""
 
-                # 언론사
                 press_el = item.find(class_="sa_text_press")
                 press_text = press_el.get_text(strip=True) if press_el else ""
 
-                # 요약
                 lede_el = item.find(class_="sa_text_lede")
                 summary_text = lede_el.get_text(strip=True) if lede_el else ""
                 if len(summary_text) > 70:
                     summary_text = summary_text[:70] + "..."
 
-                # URL
                 link_el = item.find("a", class_="sa_text_title")
                 if link_el is None:
                     link_el = item.find("a", href=True)
@@ -86,10 +80,10 @@ def crawl_section_headlines(section_name, section_url):
             except Exception:
                 continue
 
-        print(f"  [{section_name}] {len(results)}개 헤드라인 수집")
+        log(f"  [{section_name:6s}] {len(results)}개 수집")
 
     except Exception as e:
-        print(f"  [{section_name}] 크롤링 실패: {e}")
+        log(f"  [{section_name}] 크롤링 실패: {e}")
 
     return results
 
@@ -121,6 +115,12 @@ def fetch_article_dates(url):
 
 
 def main():
+    """
+    헤드라인 크롤링 메인 함수.
+
+    Returns:
+        int: 수집된 총 헤드라인 수
+    """
     today = datetime.datetime.today().strftime('%Y-%m-%d')
     year = datetime.datetime.today().strftime('%Y')
     month = datetime.datetime.today().strftime('%m')
@@ -131,8 +131,6 @@ def main():
 
     headline_file_path = os.path.join(directory, f'{today}_헤드라인_모음.txt')
 
-    print("=== 헤드라인 크롤링 시작 ===")
-
     # 모든 섹션의 헤드라인 수집
     all_headlines = []
     section_names = []
@@ -142,26 +140,23 @@ def main():
         if headlines:
             section_names.append(section_name)
             all_headlines.extend(headlines)
-        time.sleep(1)  # 섹션 간 딜레이
+        time.sleep(1)
 
     # 파일 작성
     with open(headline_file_path, 'w', encoding='utf-8') as file:
         file.write(f"=== {today} 헤드라인 모음 ===\n\n\n")
 
-        # 목차
         file.write("목차:\n")
         for idx, name in enumerate(section_names, 1):
             file.write(f"{idx}. === {name} ===\n")
         file.write("\n\n")
 
-        # 각 헤드라인 상세 (기사별 날짜 포함)
         current_tab = None
         for data in all_headlines:
             if current_tab != data['tab']:
                 current_tab = data['tab']
                 file.write(f"=== {current_tab} ===\n\n")
 
-            # 기사 페이지에서 날짜 추출
             published_date, modified_date = None, None
             if data["url"]:
                 published_date, modified_date = fetch_article_dates(data["url"])
@@ -176,8 +171,10 @@ def main():
             file.write(f"링크: {data['url']}\n\n")
             file.write("=" * 50 + "\n\n")
 
-    print(f"Headline file saved at: {headline_file_path}")
+    log(f"  ✓ 헤드라인 {len(all_headlines)}개 → {headline_file_path}")
+    return len(all_headlines)
 
 
 if __name__ == "__main__":
+    log("=== 헤드라인 크롤링 시작 ===")
     main()

@@ -15,7 +15,7 @@ import datetime
 import time
 import re
 
-from http_utils import fetch_soup, FINVIZ_HEADERS, HEADERS
+from http_utils import fetch_soup, FINVIZ_HEADERS, HEADERS, log
 
 
 def crawl_finviz_news():
@@ -35,7 +35,7 @@ def crawl_finviz_news():
 
         news_div = soup.find(id="news")
         if news_div is None:
-            print("  finviz 뉴스 섹션을 찾을 수 없습니다.")
+            log("  finviz 뉴스 섹션을 찾을 수 없습니다.")
             return news_data
 
         news_tables = news_div.find_all(class_="news")
@@ -100,10 +100,10 @@ def crawl_finviz_news():
                 except Exception:
                     continue
 
-        print(f"  finviz에서 {len(news_data)}개 뉴스 수집")
+        log(f"  finviz {len(news_data)}개 수집")
 
     except Exception as e:
-        print(f"  finviz 크롤링 실패: {e}")
+        log(f"  ✗ finviz 크롤링 실패: {e}")
 
     return news_data
 
@@ -292,6 +292,12 @@ def fetch_article_detail(data):
 
 
 def main():
+    """
+    영문 주식 뉴스 크롤링 메인 함수.
+
+    Returns:
+        int: 수집된 총 뉴스 수
+    """
     today = datetime.datetime.today().strftime('%Y-%m-%d')
     year = datetime.datetime.today().strftime('%Y')
     month = datetime.datetime.today().strftime('%m')
@@ -302,19 +308,20 @@ def main():
 
     file_path = os.path.join(directory, f'{today}_Stock_News.txt')
 
-    print("=== 영문 주식 뉴스 크롤링 시작 ===")
-
     # 1) finviz 뉴스 목록 수집
     news_data = crawl_finviz_news()
 
+    if not news_data:
+        log("  ✗ 수집된 뉴스가 없습니다.")
+        with open(file_path, 'w', encoding='utf-8') as file:
+            file.write(f"=== {today} Latest 30 Stock News ===\n\n수집된 뉴스가 없습니다.\n")
+        return 0
+
     # 2) 각 뉴스의 상세 정보 수집
-    for idx, data in enumerate(news_data):
+    for data in news_data:
         article_time, article_body = fetch_article_detail(data)
         data["time"] = article_time
         data["body"] = article_body
-
-        if (idx + 1) % 10 == 0:
-            print(f"  {idx + 1}/{len(news_data)}개 기사 상세 수집 완료")
 
     # 3) 파일 작성
     with open(file_path, 'w', encoding='utf-8') as file:
@@ -328,8 +335,10 @@ def main():
             file.write(f"Link: {data['url']}\n\n")
             file.write("=" * 50 + "\n\n")
 
-    print(f"News data has been saved at: {file_path}")
+    log(f"  ✓ 주식 뉴스 {len(news_data)}개 → {file_path}")
+    return len(news_data)
 
 
 if __name__ == "__main__":
+    log("=== 영문 주식 뉴스 크롤링 시작 ===")
     main()

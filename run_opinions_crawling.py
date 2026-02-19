@@ -3,73 +3,31 @@
 Selenium/ChromeDriver 없이 동작.
 
 수집 대상: 특정 언론사의 사설 (한국경제, 서울경제, 파이낸셜뉴스, 디지털타임스, 코리아중앙데일리)
-저장 경로: C:\news\opinions\{YYYY}\{MM}\{TODAY}_사설_모음.txt
+저장 경로: C:\\news\\opinions\\{YYYY}\\{MM}\\{TODAY}_사설_모음.txt
 
-무한 스크롤 대체 전략:
-- 네이버 뉴스 사설 페이지의 초기 SSR 응답에서 사설 목록 추출
-- 추가로 내부 API 엔드포인트를 통해 더 많은 사설을 페이지네이션으로 수집
+언론사별 officeId 파라미터로 필터링하여 무한스크롤 없이 SSR에서 수집.
 """
 
 import os
 import datetime
 import time
-import json
 
-import requests as req
-from http_utils import fetch_soup, HEADERS
+from http_utils import fetch_soup, log
 
 
-# 수집 대상 언론사
-TARGET_PRESS_NAMES = ['한국경제', '서울경제', '파이낸셜뉴스', '디지털타임스', '코리아중앙데일리']
+# 수집 대상 언론사 (이름 → 네이버 뉴스 officeId)
+TARGET_PRESS = {
+    '한국경제': '015',
+    '서울경제': '011',
+    '파이낸셜뉴스': '014',
+    '디지털타임스': '029',
+    '코리아중앙데일리': '640',
+}
 
 
-def fetch_editorial_list_from_ssr():
+def fetch_editorial_list():
     """
-    사설 페이지의 SSR(서버사이드렌더링) 응답에서 사설 목록을 추출.
-
-    Returns:
-        list of (url, press_name)
-    """
-    editorial_urls = []
-    try:
-        soup = fetch_soup("https://news.naver.com/opinion/editorial")
-
-        # opinion_editorial_list 내 각 아이템에서 언론사명 + URL 추출
-        editorial_list = soup.find(class_="opinion_editorial_list")
-        if editorial_list is None:
-            print("  SSR에서 사설 목록을 찾을 수 없습니다.")
-            return editorial_urls
-
-        items = editorial_list.find_all(class_="opinion_editorial_item")
-        for item in items:
-            try:
-                press_el = item.find(class_="press_name")
-                if press_el is None:
-                    continue
-                press_name = press_el.get_text(strip=True)
-
-                if press_name in TARGET_PRESS_NAMES:
-                    link_el = item.find("a", href=True)
-                    if link_el:
-                        href = link_el.get("href", "")
-                        if href and not href.startswith("http"):
-                            href = "https://news.naver.com" + href
-                        editorial_urls.append((href, press_name))
-            except Exception:
-                continue
-
-        print(f"  SSR에서 {len(editorial_urls)}개 사설 수집 (대상 언론사 기준)")
-
-    except Exception as e:
-        print(f"  SSR 사설 목록 수집 실패: {e}")
-
-    return editorial_urls
-
-
-def fetch_editorial_list_from_api():
-    """
-    네이버 뉴스 사설 API를 통해 추가 사설 목록을 수집.
-    무한 스크롤 대체 방법.
+    대상 언론사별로 사설 페이지를 요청하여 사설 목록을 수집.
 
     Returns:
         list of (url, press_name)
@@ -77,55 +35,38 @@ def fetch_editorial_list_from_api():
     editorial_urls = []
     today_str = datetime.datetime.today().strftime('%Y%m%d')
 
-    # 네이버 뉴스 사설 API 엔드포인트 (date 기반)
-    api_url = (
-        "https://news.naver.com/api/opinion/editorial"
-        f"?date={today_str}"
-        "&page={page}"
-    )
-
-    for page in range(1, 6):  # 최대 5페이지 시도
+    for press_name, office_id in TARGET_PRESS.items():
         try:
-            url = api_url.format(page=page)
-            response = req.get(url, headers=HEADERS, timeout=10)
+            url = (
+                f"https://news.naver.com/opinion/editorial"
+                f"?officeId={office_id}&date={today_str}"
+            )
+            soup = fetch_soup(url)
 
-            if response.status_code != 200:
-                break
+            editorial_list = soup.find(class_="opinion_editorial_list")
+            if editorial_list is None:
+                log(f"  [{press_name}] 사설 목록을 찾을 수 없습니다.")
+                continue
 
-            data = response.json()
-
-            # API 응답 구조에 따라 파싱
-            items = []
-            if isinstance(data, dict):
-                items = data.get("editorialList", data.get("items", data.get("data", [])))
-            elif isinstance(data, list):
-                items = data
-
-            if not items:
-                break
-
+            items = editorial_list.find_all(class_="opinion_editorial_item")
+            count = 0
             for item in items:
                 try:
-                    press_name = item.get("pressName", item.get("officeName", ""))
-                    if press_name in TARGET_PRESS_NAMES:
-                        article_url = item.get("articleUrl", item.get("url", ""))
-                        if not article_url:
-                            oid = item.get("officeId", item.get("oid", ""))
-                            aid = item.get("articleId", item.get("aid", ""))
-                            if oid and aid:
-                                article_url = f"https://n.news.naver.com/article/{oid}/{aid}"
-                        if article_url:
-                            editorial_urls.append((article_url, press_name))
+                    link_el = item.find("a", href=True)
+                    if link_el:
+                        href = link_el.get("href", "")
+                        if href and not href.startswith("http"):
+                            href = "https://news.naver.com" + href
+                        editorial_urls.append((href, press_name))
+                        count += 1
                 except Exception:
                     continue
 
+            log(f"  [{press_name:10s}] {count}개 수집")
             time.sleep(0.5)
 
-        except (req.RequestException, json.JSONDecodeError):
-            break
-
-    if editorial_urls:
-        print(f"  API에서 추가 {len(editorial_urls)}개 사설 수집")
+        except Exception as e:
+            log(f"  [{press_name}] 사설 수집 실패: {e}")
 
     return editorial_urls
 
@@ -140,11 +81,9 @@ def fetch_editorial_content(url):
     try:
         soup = fetch_soup(url, delay=1)
 
-        # 제목
         title_el = soup.find(class_="media_end_head_headline")
         title = title_el.get_text(strip=True) if title_el else ""
 
-        # 작성일/수정일
         date_elements = soup.find_all(class_="media_end_head_info_datestamp_time")
         published_date = None
         modified_date = None
@@ -156,7 +95,6 @@ def fetch_editorial_content(url):
             if mod_el:
                 modified_date = mod_el.get_text(strip=True)
 
-        # 본문
         body_el = soup.find(class_="_article_body")
         if body_el is None:
             body_el = soup.find(id="newsct_article")
@@ -172,11 +110,17 @@ def fetch_editorial_content(url):
         }
 
     except Exception as e:
-        print(f"  사설 상세 수집 실패 ({url}): {e}")
+        log(f"  ✗ 사설 상세 수집 실패: {e}")
         return None
 
 
 def main():
+    """
+    사설 크롤링 메인 함수.
+
+    Returns:
+        int: 수집된 총 사설 수
+    """
     today = datetime.datetime.today().strftime('%Y-%m-%d')
     year = datetime.datetime.today().strftime('%Y')
     month = datetime.datetime.today().strftime('%m')
@@ -187,31 +131,25 @@ def main():
 
     opinion_file_path = os.path.join(opinion_directory, f'{today}_사설 모음.txt')
 
-    print("=== 사설 크롤링 시작 ===")
+    # 1) 대상 언론사별 사설 목록 수집
+    editorial_urls = fetch_editorial_list()
 
-    # 1) SSR에서 사설 목록 수집
-    editorial_urls = fetch_editorial_list_from_ssr()
-
-    # 2) API에서 추가 수집 시도
-    api_urls = fetch_editorial_list_from_api()
-
-    # 중복 제거 후 합치기
-    seen_urls = set(url for url, _ in editorial_urls)
-    for url, press in api_urls:
+    # 중복 제거
+    seen_urls = set()
+    unique_urls = []
+    for url, press in editorial_urls:
         if url not in seen_urls:
-            editorial_urls.append((url, press))
+            unique_urls.append((url, press))
             seen_urls.add(url)
-
-    print(f"  총 {len(editorial_urls)}개 사설 수집 완료")
+    editorial_urls = unique_urls
 
     if not editorial_urls:
-        print("  수집된 사설이 없습니다.")
-        # 빈 파일이라도 생성
+        log("  ✗ 수집된 사설이 없습니다.")
         with open(opinion_file_path, 'w', encoding='utf-8') as file:
             file.write(f"=== {today} 사설 모음 ===\n\n수집된 사설이 없습니다.\n")
-        return
+        return 0
 
-    # 3) 각 사설 상세 수집 및 파일 작성
+    # 2) 각 사설 상세 수집 및 파일 작성
     with open(opinion_file_path, 'w', encoding='utf-8') as file:
         file.write(f"=== {today} 사설 모음 ===\n\n\n")
 
@@ -231,8 +169,10 @@ def main():
             file.write(f"내용:\n{content['body']}\n\n")
             file.write("=" * 50 + "\n\n")
 
-    print(f"Opinion file saved at: {opinion_file_path}")
+    log(f"  ✓ 사설 {len(editorial_urls)}개 → {opinion_file_path}")
+    return len(editorial_urls)
 
 
 if __name__ == "__main__":
+    log("=== 사설 크롤링 시작 ===")
     main()
