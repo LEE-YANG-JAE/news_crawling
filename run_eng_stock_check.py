@@ -1,222 +1,297 @@
+"""
+영문 주식 뉴스 크롤링 (requests + BeautifulSoup 버전)
+Selenium/ChromeDriver 없이 동작.
+
+수집 대상: finviz.com 뉴스 + 개별 소스별 기사 상세
+저장 경로: C:\\news\\stock_news\\{YYYY}\\{MM}\\{TODAY}_Stock_News.txt
+
+지원 소스: Yahoo Finance, PR Newswire, BusinessWire, GlobeNewsWire,
+          Investopedia, NewsFileCorp 등
+JS 렌더링이 필요한 소스는 제목/URL만 수집 (graceful degradation)
+"""
+
 import os
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 import datetime
 import time
-from selenium.webdriver.chrome.service import Service as ChromeService
-from webdriver_manager.chrome import ChromeDriverManager
+import re
 
-def main():
-    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+from http_utils import fetch_soup, FINVIZ_HEADERS, HEADERS
 
-    # Store collected data
+
+def crawl_finviz_news():
+    """
+    finviz.com 뉴스 페이지에서 뉴스 목록을 수집.
+
+    Returns:
+        list of dict: [{title, url, labels, press, time, body}, ...]
+    """
     news_data = []
-
     try:
-        # Open the web page
-        driver.get('https://finviz.com/news.ashx?v=3')
+        soup = fetch_soup(
+            "https://finviz.com/news.ashx?v=3",
+            headers=FINVIZ_HEADERS,
+            timeout=15,
+        )
 
-        # Find the div with ID 'news'
-        news_div = driver.find_element(By.ID, 'news')
+        news_div = soup.find(id="news")
+        if news_div is None:
+            print("  finviz 뉴스 섹션을 찾을 수 없습니다.")
+            return news_data
 
-        # Save news items locally to avoid issues with page refresh
-        news_items = news_div.find_elements(By.CLASS_NAME, 'news')
+        news_tables = news_div.find_all(class_="news")
 
-        # Processing the news items
-        for news_item in news_items:
-            try:
-                table = news_item.find_element(By.TAG_NAME, 'table')
-                tbody = table.find_element(By.TAG_NAME, 'tbody')
-                rows = tbody.find_elements(By.TAG_NAME, 'tr')[:30]  # Limit to 30 rows
-
-                # Extract data from each row
-                for row in rows:
-                    try:
-                        news_link_cell = row.find_element(By.CLASS_NAME, 'news_link-cell')
-                        news_badges_container = news_link_cell.find_element(By.CLASS_NAME, 'news-badges-container')
-                        anchors = news_badges_container.find_elements(By.TAG_NAME, 'a')
-
-                        # Collect data
-                        if len(anchors) > 0:
-                            news_url = anchors[0].get_attribute('href')
-                            news_title = anchors[0].text.strip()
-                            stock_labels = [label.text.strip() for label in news_badges_container.find_elements(By.CLASS_NAME, 'stock-news-label')]
-
-                            # Collect press name
-                            press_element = news_link_cell.find_element(By.CLASS_NAME, 'news_date-cell')
-                            press_name = press_element.text.strip()
-
-                            # Store collected data
-                            news_data.append({
-                                'title': news_title,
-                                'url': news_url,
-                                'labels': stock_labels,
-                                'press': press_name,
-                                'time': '',
-                                'body': ''
-                            })
-
-                    except NoSuchElementException:
-                        continue
-                    except TimeoutException:
-                        continue
-
-            except NoSuchElementException:
+        for news_table in news_tables:
+            table = news_table.find("table")
+            if table is None:
                 continue
 
-    except WebDriverException as e:
-        print(f"An error occurred with the WebDriver: {e}")
+            rows = table.find_all("tr")
 
-    for data in news_data:
-        if 'finance.yahoo.com' in data['url']:
-            driver.get(data['url'])
-            time.sleep(1)  # Pause for 1 second
+            for row in rows:
+                try:
+                    news_link_cell = row.find(class_="news_link-cell")
+                    if news_link_cell is None:
+                        continue
 
-            try:
-                # Collect time information
-                article_time = driver.find_element(By.CLASS_NAME, 'byline-attr-meta-time').text.strip()
+                    badges_container = news_link_cell.find(class_="news-badges-container")
+                    if badges_container is None:
+                        continue
 
-                # Collect body text
-                article_div = driver.find_element(By.CLASS_NAME, 'article')
-                body_wrap_div = article_div.find_element(By.CLASS_NAME, 'body-wrap')
-                body_div = body_wrap_div.find_element(By.CLASS_NAME, 'body')
+                    anchors = badges_container.find_all("a")
+                    if not anchors:
+                        continue
 
-                # Start with the first <p> tag
-                paragraphs = body_div.find_elements(By.TAG_NAME, 'p')
-                first_p_text = paragraphs[0].text.strip()
+                    # onclick에서 전체 URL 추출 (href는 잘릴 수 있음)
+                    onclick = anchors[0].get("onclick", "")
+                    onclick_match = re.search(
+                        r"trackAndOpenNews\(event,\s*'[^']*',\s*'([^']+)'\)",
+                        onclick,
+                    )
+                    news_url = onclick_match.group(1) if onclick_match else anchors[0].get("href", "")
 
-                # Check if the first paragraph is a byline or too short
-                if first_p_text.startswith('By') or len(first_p_text) < 50:
-                    # Move to the second <p> tag if the first one is not suitable
-                    first_p_text = paragraphs[1].text.strip()
+                    # finviz 내부 URL과 외부 URL 분리
+                    finviz_url = ""
+                    if news_url and not news_url.startswith("http"):
+                        finviz_url = "https://finviz.com" + news_url
+                        news_url = finviz_url
 
-                # Limit the body text to 300 characters
-                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
+                    news_title = anchors[0].get_text(strip=True)
 
-                # Update data
-                data['time'] = article_time
-                data['body'] = article_body
+                    # 종목 라벨
+                    stock_labels = [
+                        label.get_text(strip=True)
+                        for label in badges_container.find_all(class_="stock-news-label")
+                    ]
 
-            except NoSuchElementException:
-                data['time'] = ''
-                data['body'] = 'Body text not available'
+                    # 언론사/시간
+                    date_cell = news_link_cell.find(class_="news_date-cell")
+                    press_name = date_cell.get_text(strip=True) if date_cell else ""
 
-        elif 'www.prnewswire.co.uk' in data['url'] or 'www.prnewswire.com' in data['url']:
-            driver.get(data['url'])
-            time.sleep(1)  # Pause for 1 second
+                    news_data.append({
+                        "title": news_title,
+                        "url": news_url,
+                        "finviz_url": finviz_url,
+                        "labels": stock_labels,
+                        "press": press_name,
+                        "time": "",
+                        "body": "",
+                    })
 
-            try:
-                # Collect time information
-                article_time = driver.find_element(By.CLASS_NAME, 'mb-no').text.strip()
+                except Exception:
+                    continue
 
-                # Collect body text
-                article_body_div = driver.find_element(By.CLASS_NAME, 'release-body')
-                row_div = article_body_div.find_element(By.CLASS_NAME, 'row')
-                first_p_text = row_div.find_element(By.TAG_NAME, 'p').text.strip()
+        print(f"  finviz에서 {len(news_data)}개 뉴스 수집")
 
-                # Limit the body text to 300 characters
-                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
+    except Exception as e:
+        print(f"  finviz 크롤링 실패: {e}")
 
-                # Update data
-                data['time'] = article_time
-                data['body'] = article_body
+    return news_data
 
-            except NoSuchElementException:
-                data['time'] = ''
-                data['body'] = 'Body text not available'
 
-        elif 'www.businesswire.com' in data['url']:
-            driver.get(data['url'])
-            time.sleep(1)  # Pause for 1 second
+def _fetch_from_finviz_page(url):
+    """
+    finviz 내부 뉴스 페이지(finviz.com/news/...)에서 날짜와 본문을 추출.
 
-            try:
-                # Collect body text
-                subhead_div = driver.find_element(By.CLASS_NAME, 'bw-release-story')
-                first_p = subhead_div.find_element(By.CLASS_NAME, 'bwalignc').text.strip()
+    Returns:
+        (time_str, body_str) or (None, None) if parsing fails
+    """
+    try:
+        soup = fetch_soup(url, headers=FINVIZ_HEADERS, timeout=15, delay=1)
+        nc = soup.find(class_="news-content")
+        if nc is None:
+            return None, None
 
-                # Limit the body text to 300 characters
-                article_body = first_p[:300] + "..." if len(first_p) > 300 else first_p
+        wrapper = nc.find("div")
+        if wrapper is None:
+            return None, None
 
-                # Update data
-                data['body'] = article_body
+        # 날짜: "February 19, 2026, 4:02 PM" 패턴
+        full_text = wrapper.get_text(separator=" ", strip=True)
+        date_match = re.search(
+            r"((?:January|February|March|April|May|June|July|August|September"
+            r"|October|November|December)\s+\d{1,2},\s+\d{4},?\s*\d{1,2}:\d{2}\s*(?:AM|PM)?)",
+            full_text,
+        )
+        article_time = date_match.group(1) if date_match else ""
 
-            except NoSuchElementException:
-                data['body'] = 'Body text not available'
+        # 본문: 첫 번째 충분히 긴 문단
+        article_body = ""
+        for p in wrapper.find_all("p"):
+            text = p.get_text(strip=True)
+            if len(text) > 80:
+                article_body = text[:300] + "..." if len(text) > 300 else text
+                break
 
-        elif 'www.globenewswire.com' in data['url']:
-            driver.get(data['url'])
-            time.sleep(1)  # Pause for 1 second
+        # 긴 문단이 없으면 첫 몇 개 문단 합치기
+        if not article_body:
+            paragraphs = wrapper.find_all("p")
+            if paragraphs:
+                combined = " ".join(p.get_text(strip=True) for p in paragraphs[:3])
+                if combined:
+                    article_body = combined[:300] + "..." if len(combined) > 300 else combined
 
-            try:
-                # Collect time information
-                article_time = driver.find_element(By.CLASS_NAME, 'article-published-source').text.strip()
+        return article_time, article_body
+    except Exception:
+        return None, None
 
-                # Collect body text
-                article_body_div = driver.find_element(By.CLASS_NAME, 'article-body')
-                first_p_text = article_body_div.find_element(By.TAG_NAME, 'p').text.strip()
 
-                # Limit the body text to 300 characters
-                article_body = first_p_text[:300] + "..." if len(first_p_text) > 300 else first_p_text
+def fetch_article_detail(data):
+    """
+    개별 뉴스 소스에 따라 기사 상세(시간, 본문)를 추출.
 
-                # Update data
-                data['time'] = article_time
-                data['body'] = article_body
+    finviz 내부 URL은 finviz 페이지에서 직접 파싱.
+    외부 URL은 해당 소스 사이트에서 파싱 시도 후,
+    실패하면 finviz 내부 페이지로 fallback.
 
-            except NoSuchElementException:
-                data['time'] = ''
-                data['body'] = 'Body text not available'
+    Args:
+        data: dict with 'url' key
 
-        elif 'www.investopedia.com' in data['url']:
-            driver.get(data['url'])
-            time.sleep(1)  # Pause for 1 second
+    Returns:
+        (time_str, body_str)
+    """
+    url = data.get("url", "")
+    article_time = ""
+    article_body = ""
 
-            try:
-                # Collect time information
-                article_time = driver.find_element(By.CLASS_NAME, 'mntl-attribution__item-date').text.strip()
+    try:
+        # finviz 내부 뉴스 페이지 (finviz.com/news/...)
+        if "finviz.com/news/" in url:
+            t, b = _fetch_from_finviz_page(url)
+            if t:
+                article_time = t
+            if b:
+                article_body = b
+            return article_time, article_body
 
-                # Collect body text
-                article_body_div = driver.find_element(By.CLASS_NAME, 'article-body-content')
-                paragraphs = article_body_div.find_elements(By.CLASS_NAME, 'finance-sc-block-html')
+        if "finance.yahoo.com" in url:
+            soup = fetch_soup(url, delay=1)
 
-                # Extract text from the paragraphs and concatenate
-                article_body = ' '.join([p.text.strip() for p in paragraphs])
+            time_el = soup.find(class_="byline-attr-meta-time")
+            if time_el:
+                article_time = time_el.get_text(strip=True)
 
-                # Limit the body text to 300 characters
-                article_body = article_body[:300] + "..." if len(article_body) > 300 else article_body
+            article_div = soup.find(class_="article")
+            if article_div:
+                body_wrap = article_div.find(class_="body-wrap")
+                if body_wrap:
+                    body_div = body_wrap.find(class_="body")
+                    if body_div:
+                        paragraphs = body_div.find_all("p")
+                        if paragraphs:
+                            first_p = paragraphs[0].get_text(strip=True)
+                            if first_p.startswith("By") or len(first_p) < 50:
+                                first_p = paragraphs[1].get_text(strip=True) if len(paragraphs) > 1 else first_p
+                            article_body = first_p[:300] + "..." if len(first_p) > 300 else first_p
 
-                # Update data
-                data['time'] = article_time
-                data['body'] = article_body
+        elif "www.prnewswire.co.uk" in url or "www.prnewswire.com" in url:
+            soup = fetch_soup(url, delay=1)
 
-            except NoSuchElementException:
-                data['time'] = ''
-                data['body'] = 'Body text not available'
+            time_el = soup.find(class_="mb-no")
+            if time_el:
+                article_time = time_el.get_text(strip=True)
 
-        elif 'www.newsfilecorp.com' in data['url']:
-            driver.get(data['url'])
-            time.sleep(1)  # Pause for 1 second
+            release_body = soup.find(class_="release-body")
+            if release_body:
+                row_div = release_body.find(class_="row")
+                if row_div:
+                    first_p = row_div.find("p")
+                    if first_p:
+                        text = first_p.get_text(strip=True)
+                        article_body = text[:300] + "..." if len(text) > 300 else text
 
-            try:
-                # Collect time information
-                article_time = driver.find_element(By.ID, 'release').text.strip()
+        elif "www.businesswire.com" in url:
+            soup = fetch_soup(url, delay=1)
 
-                # Collect body text
-                paragraphs = driver.find_elements(By.TAG_NAME, 'p')
-                article_body = ' '.join([p.text.strip() for p in paragraphs if not p.get_attribute('style')])
+            story = soup.find(class_="bw-release-story")
+            if story:
+                align_el = story.find(class_="bwalignc")
+                if align_el:
+                    text = align_el.get_text(strip=True)
+                    article_body = text[:300] + "..." if len(text) > 300 else text
 
-                # Limit the body text to 300 characters
-                article_body = article_body[:300] + "..." if len(article_body) > 300 else article_body
+        elif "www.globenewswire.com" in url:
+            soup = fetch_soup(url, delay=1)
 
-                # Update data
-                data['time'] = article_time
-                data['body'] = article_body
+            time_el = soup.find(class_="article-published-source")
+            if time_el:
+                article_time = time_el.get_text(strip=True)
 
-            except NoSuchElementException:
-                data['time'] = ''
-                data['body'] = 'Body text not available'
+            body_div = soup.find(class_="article-body")
+            if body_div:
+                first_p = body_div.find("p")
+                if first_p:
+                    text = first_p.get_text(strip=True)
+                    article_body = text[:300] + "..." if len(text) > 300 else text
 
-    # Set up the file path for saving the text file
+        elif "www.investopedia.com" in url:
+            soup = fetch_soup(url, delay=1)
+
+            time_el = soup.find(class_="mntl-attribution__item-date")
+            if time_el:
+                article_time = time_el.get_text(strip=True)
+
+            body_div = soup.find(class_="article-body-content")
+            if body_div:
+                paragraphs = body_div.find_all(class_="finance-sc-block-html")
+                if paragraphs:
+                    text = " ".join(p.get_text(strip=True) for p in paragraphs)
+                    article_body = text[:300] + "..." if len(text) > 300 else text
+
+        elif "www.newsfilecorp.com" in url:
+            soup = fetch_soup(url, delay=1)
+
+            release_el = soup.find(id="release")
+            if release_el:
+                article_time = release_el.get_text(strip=True)[:100]
+
+            paragraphs = soup.find_all("p")
+            if paragraphs:
+                text = " ".join(
+                    p.get_text(strip=True)
+                    for p in paragraphs
+                    if not p.get("style")
+                )
+                article_body = text[:300] + "..." if len(text) > 300 else text
+
+        # 기타 소스는 제목/URL만 유지 (graceful degradation)
+
+    except Exception:
+        pass
+
+    # 외부 소스에서 본문을 못 가져온 경우, finviz 내부 페이지로 fallback
+    if not article_body:
+        finviz_url = data.get("finviz_url", "")
+        if finviz_url:
+            t, b = _fetch_from_finviz_page(finviz_url)
+            if t and not article_time:
+                article_time = t
+            if b:
+                article_body = b
+
+    return article_time, article_body
+
+
+def main():
     today = datetime.datetime.today().strftime('%Y-%m-%d')
     year = datetime.datetime.today().strftime('%Y')
     month = datetime.datetime.today().strftime('%m')
@@ -227,7 +302,21 @@ def main():
 
     file_path = os.path.join(directory, f'{today}_Stock_News.txt')
 
-    # Save the collected data to a text file
+    print("=== 영문 주식 뉴스 크롤링 시작 ===")
+
+    # 1) finviz 뉴스 목록 수집
+    news_data = crawl_finviz_news()
+
+    # 2) 각 뉴스의 상세 정보 수집
+    for idx, data in enumerate(news_data):
+        article_time, article_body = fetch_article_detail(data)
+        data["time"] = article_time
+        data["body"] = article_body
+
+        if (idx + 1) % 10 == 0:
+            print(f"  {idx + 1}/{len(news_data)}개 기사 상세 수집 완료")
+
+    # 3) 파일 작성
     with open(file_path, 'w', encoding='utf-8') as file:
         file.write(f"=== {today} Latest 30 Stock News ===\n\n\n")
         for data in news_data:
@@ -240,9 +329,6 @@ def main():
             file.write("=" * 50 + "\n\n")
 
     print(f"News data has been saved at: {file_path}")
-
-    # Close the browser
-    driver.quit()
 
 
 if __name__ == "__main__":
