@@ -32,25 +32,21 @@ if getattr(sys, 'frozen', False):
     if bundle_dir not in sys.path:
         sys.path.insert(0, bundle_dir)
 
-from http_utils import check_internet, log, get_log_buffer, clear_log_buffer
+from config import (
+    NEWS_DIR, LOGS_DIR,
+    INTERNET_MAX_RETRIES, INTERNET_RETRY_INTERVAL,
+    MIN_EXPECTED_HEADLINES, MIN_EXPECTED_ECONOMICS,
+    MIN_EXPECTED_OPINIONS, MIN_EXPECTED_STOCK_NEWS,
+)
+from http_utils import check_internet, log, setup_file_logging
 
 
 # ─────────────────────────────────────────────
 # 인터넷 연결 확인
 # ─────────────────────────────────────────────
 
-def wait_for_internet(max_retries=5, interval=5):
-    """
-    인터넷 연결을 확인. 실패 시 interval초 간격으로 재시도.
-
-    Args:
-        max_retries: 최대 재시도 횟수
-        interval: 재시도 간격 (초)
-
-    Returns:
-        True: 연결 성공
-        False: max_retries 초과 시 연결 실패
-    """
+def wait_for_internet(max_retries=INTERNET_MAX_RETRIES, interval=INTERNET_RETRY_INTERVAL):
+    """인터넷 연결을 확인. 실패 시 interval초 간격으로 재시도."""
     for attempt in range(1, max_retries + 1):
         log(f"  연결 확인 중... ({attempt}/{max_retries})")
         if check_internet():
@@ -69,28 +65,20 @@ def wait_for_internet(max_retries=5, interval=5):
 # ─────────────────────────────────────────────
 
 def create_news_shortcut():
-    """
-    바탕화면에 C:\\news 폴더의 바로가기(.lnk)를 생성.
-    이미 존재하면 건너뛴다.
-
-    Returns:
-        True: 생성 성공 또는 이미 존재
-        False: 생성 실패
-    """
+    """바탕화면에 C:\\news 폴더의 바로가기(.lnk)를 생성."""
     desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
     shortcut_path = os.path.join(desktop_path, "뉴스 모음.lnk")
-    target_path = "C:\\news"
 
     if os.path.exists(shortcut_path):
         return True
 
-    os.makedirs(target_path, exist_ok=True)
+    os.makedirs(NEWS_DIR, exist_ok=True)
 
     try:
         import win32com.client
         shell = win32com.client.Dispatch("WScript.Shell")
         shortcut = shell.CreateShortCut(shortcut_path)
-        shortcut.TargetPath = target_path
+        shortcut.TargetPath = NEWS_DIR
         shortcut.Description = "일일 뉴스 크롤링 모음"
         shortcut.IconLocation = "shell32.dll,3"
         shortcut.save()
@@ -102,27 +90,13 @@ def create_news_shortcut():
 
 
 # ─────────────────────────────────────────────
-# 로그 파일 기록
+# 크롤링 결과 검증
 # ─────────────────────────────────────────────
 
-def write_log():
-    """
-    전체 콘솔 출력 버퍼를 로그 파일에 기록.
-    로그 파일 = 콘솔 출력의 완전한 복사본.
-    """
-    today = datetime.datetime.today().strftime('%Y-%m-%d')
-    year = datetime.datetime.today().strftime('%Y')
-    month = datetime.datetime.today().strftime('%m')
-
-    log_dir = os.path.join('C:\\news', 'logs', year, month)
-    os.makedirs(log_dir, exist_ok=True)
-
-    log_path = os.path.join(log_dir, f'{today}_실행로그.txt')
-
-    with open(log_path, 'w', encoding='utf-8') as f:
-        f.write(get_log_buffer())
-
-    log(f"로그 저장: {log_path}")
+def validate_count(name, count, min_expected):
+    """수집 건수가 기대치 이하이면 WARNING 로그 출력."""
+    if count is not None and count < min_expected:
+        log(f"  [WARNING] {name}: {count}개 수집 (기대 최소 {min_expected}개) - 셀렉터 변경 확인 필요")
 
 
 # ─────────────────────────────────────────────
@@ -130,8 +104,16 @@ def write_log():
 # ─────────────────────────────────────────────
 
 def main():
-    clear_log_buffer()
     start_time = datetime.datetime.now()
+
+    # 로그 파일 핸들러 설정 (즉시 기록)
+    today = start_time.strftime('%Y-%m-%d')
+    year = start_time.strftime('%Y')
+    month = start_time.strftime('%m')
+    log_dir = os.path.join(LOGS_DIR, year, month)
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f'{today}_실행로그.txt')
+    setup_file_logging(log_path)
 
     log("=" * 60)
     log("  일일 크롤링 자동화")
@@ -143,10 +125,9 @@ def main():
     # ── [1/6] 인터넷 연결 확인 ──
     log("")
     log("[1/6] 인터넷 연결 확인")
-    if not wait_for_internet(max_retries=5, interval=5):
+    if not wait_for_internet():
         log("  ✗ 인터넷 연결 실패 (5회 시도 후 중단)")
         results["인터넷 연결"] = "실패"
-        write_log()
         sys.exit(1)
     results["인터넷 연결"] = "성공"
 
@@ -168,6 +149,7 @@ def main():
         import run_headline_crawling
         headline_count = run_headline_crawling.main()
         results["헤드라인"] = f"{headline_count}개 수집" if headline_count else "실패"
+        validate_count("헤드라인", headline_count, MIN_EXPECTED_HEADLINES)
     except Exception as e:
         results["헤드라인"] = f"실패: {e}"
         log(f"  ✗ 헤드라인 크롤링 실패: {e}")
@@ -179,6 +161,7 @@ def main():
         import run_economics_crawling
         economics_count = run_economics_crawling.main()
         results["경제 뉴스"] = f"{economics_count}개 수집" if economics_count else "실패"
+        validate_count("경제 뉴스", economics_count, MIN_EXPECTED_ECONOMICS)
     except Exception as e:
         results["경제 뉴스"] = f"실패: {e}"
         log(f"  ✗ 경제 뉴스 크롤링 실패: {e}")
@@ -190,6 +173,7 @@ def main():
         import run_opinions_crawling
         opinions_count = run_opinions_crawling.main()
         results["사설"] = f"{opinions_count}개 수집" if opinions_count else "실패"
+        validate_count("사설", opinions_count, MIN_EXPECTED_OPINIONS)
     except Exception as e:
         results["사설"] = f"실패: {e}"
         log(f"  ✗ 사설 크롤링 실패: {e}")
@@ -201,6 +185,7 @@ def main():
         import run_eng_stock_check
         stock_count = run_eng_stock_check.main()
         results["영문 주식 뉴스"] = f"{stock_count}개 수집" if stock_count else "실패"
+        validate_count("영문 주식 뉴스", stock_count, MIN_EXPECTED_STOCK_NEWS)
     except Exception as e:
         results["영문 주식 뉴스"] = f"실패: {e}"
         log(f"  ✗ 영문 주식 뉴스 크롤링 실패: {e}")
@@ -229,13 +214,8 @@ def main():
     log(f"  소요: {h:02d}:{m:02d}:{s:02d}")
     log("=" * 60)
 
-    # ── 로그 파일 기록 ──
     log("")
-    try:
-        write_log()
-    except Exception as e:
-        log(f"  ✗ 로그 기록 실패: {e}")
-
+    log(f"로그 저장: {log_path}")
     log("일일 크롤링 자동화 완료.")
 
     # EXE 실행 시 사용자가 결과를 확인할 수 있도록 대기

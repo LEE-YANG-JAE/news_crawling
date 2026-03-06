@@ -11,7 +11,11 @@ import datetime
 import time
 from difflib import SequenceMatcher
 
-from http_utils import fetch_soup, log
+from config import (
+    ECONOMICS_DIR, NAVER_ECONOMICS_URL, SECTION_CRAWL_DELAY,
+    find_with_fallback,
+)
+from http_utils import fetch_soup, fetch_article_dates, log
 
 
 def are_similar(str1, str2, threshold=0.8):
@@ -28,7 +32,7 @@ def get_economics_subsections():
     """
     subsections = []
     try:
-        soup = fetch_soup("https://news.naver.com/section/101")
+        soup = fetch_soup(NAVER_ECONOMICS_URL)
 
         nav_section = soup.find(class_="ct_snb_nav")
         if nav_section is None:
@@ -60,12 +64,9 @@ def crawl_subsection_articles(subsection_data):
     """
     articles = []
     try:
-        soup = fetch_soup(subsection_data["url"], delay=1)
+        soup = fetch_soup(subsection_data["url"], delay=SECTION_CRAWL_DELAY)
 
-        latest_section = soup.find(class_="section_latest")
-        if latest_section is None:
-            latest_section = soup.find(class_=lambda c: c and "section_latest" in c)
-
+        latest_section = find_with_fallback(soup, "latest_section")
         if latest_section is None:
             return articles
 
@@ -109,32 +110,6 @@ def crawl_subsection_articles(subsection_data):
     return articles
 
 
-def fetch_article_dates(url):
-    """
-    개별 기사 페이지에서 작성일/수정일을 추출.
-
-    Returns:
-        (published_date, modified_date) or (None, None)
-    """
-    try:
-        soup = fetch_soup(url, delay=0.5)
-        date_elements = soup.find_all(class_="media_end_head_info_datestamp_time")
-
-        published_date = None
-        modified_date = None
-
-        if len(date_elements) >= 1:
-            published_date = date_elements[0].get_text(strip=True)
-        if len(date_elements) >= 2:
-            mod_el = soup.find(class_="_ARTICLE_MODIFY_DATE_TIME")
-            if mod_el:
-                modified_date = mod_el.get_text(strip=True)
-
-        return published_date, modified_date
-    except Exception:
-        return None, None
-
-
 def main():
     """
     경제 뉴스 크롤링 메인 함수.
@@ -146,8 +121,7 @@ def main():
     year = datetime.datetime.today().strftime('%Y')
     month = datetime.datetime.today().strftime('%m')
 
-    base_dir = os.path.join('C:\\news', 'economics')
-    directory = os.path.join(base_dir, year, month)
+    directory = os.path.join(ECONOMICS_DIR, year, month)
     os.makedirs(directory, exist_ok=True)
 
     economics_file_path = os.path.join(directory, f'{today}_경제_영역별_뉴스_모음.txt')

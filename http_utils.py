@@ -6,113 +6,137 @@ Selenium/ChromeDriver 없이 동작.
 
 import sys
 import time
+import logging
 import requests
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 
+from config import (
+    HEADERS, FINVIZ_HEADERS,
+    DEFAULT_TIMEOUT, RETRY_COUNT, RETRY_BACKOFF,
+    INTERNET_CHECK_URL, INTERNET_CHECK_TIMEOUT,
+    ARTICLE_DETAIL_DELAY,
+)
+
 
 # ─────────────────────────────────────────────
-# 로깅 유틸리티
+# 로깅 설정
 # ─────────────────────────────────────────────
 
-_log_buffer = []
+logger = logging.getLogger("news_crawling")
+logger.setLevel(logging.DEBUG)
+
+# 콘솔 핸들러
+_console_handler = logging.StreamHandler(sys.stdout)
+_console_handler.setLevel(logging.INFO)
+_console_formatter = logging.Formatter("%(message)s")
+_console_handler.setFormatter(_console_formatter)
+logger.addHandler(_console_handler)
+
+# 파일 핸들러는 setup_file_logging()에서 동적으로 추가
+_file_handler = None
+
+
+def setup_file_logging(log_path):
+    """로그 파일 핸들러를 설정. 즉시 기록(flush)."""
+    global _file_handler
+    if _file_handler is not None:
+        logger.removeHandler(_file_handler)
+    _file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    _file_handler.setLevel(logging.DEBUG)
+    _file_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+    _file_handler.setFormatter(_file_formatter)
+    logger.addHandler(_file_handler)
 
 
 def log(msg=""):
-    """콘솔 출력 + 내부 버퍼에 동시 기록."""
-    # Windows cp949 인코딩 문제 방지
-    try:
-        print(msg)
-    except UnicodeEncodeError:
-        sys.stdout.buffer.write((msg + "\n").encode("utf-8", errors="replace"))
-        sys.stdout.buffer.flush()
-    _log_buffer.append(msg)
+    """콘솔 + 파일에 동시 기록. 기존 인터페이스 호환."""
+    if msg:
+        logger.info(msg)
+    else:
+        logger.info("")
 
 
-def get_log_buffer():
-    """버퍼에 쌓인 전체 로그를 줄바꿈 문자열로 반환."""
-    return "\n".join(_log_buffer)
+# ─────────────────────────────────────────────
+# HTTP 세션 (재시도 로직 내장)
+# ─────────────────────────────────────────────
+
+def _create_session():
+    """재시도 로직이 적용된 requests.Session 생성."""
+    session = requests.Session()
+    retry = Retry(
+        total=RETRY_COUNT,
+        backoff_factor=RETRY_BACKOFF,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET", "HEAD"],
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
 
 
-def clear_log_buffer():
-    """로그 버퍼 초기화."""
-    _log_buffer.clear()
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-}
-
-FINVIZ_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://finviz.com/",
-}
+_session = _create_session()
 
 
-def fetch_soup(url, timeout=10, headers=None, delay=0):
+def fetch_soup(url, timeout=DEFAULT_TIMEOUT, headers=None, delay=0):
     """
     URL에서 HTML을 가져와 BeautifulSoup 객체로 반환.
-
-    Args:
-        url: 요청할 URL
-        timeout: 요청 타임아웃 (초)
-        headers: 커스텀 헤더 (None이면 기본 HEADERS 사용)
-        delay: 요청 전 대기 시간 (초), 서버 부하 방지용
-
-    Returns:
-        BeautifulSoup 객체
-
-    Raises:
-        requests.RequestException: 요청 실패 시
+    HTTP 레벨 재시도(3회, 백오프 0.5s) 자동 적용.
     """
     if delay > 0:
         time.sleep(delay)
     hdrs = headers if headers is not None else HEADERS
-    response = requests.get(url, headers=hdrs, timeout=timeout)
+    response = _session.get(url, headers=hdrs, timeout=timeout)
     response.raise_for_status()
     return BeautifulSoup(response.text, "html.parser")
 
 
-def fetch_text(url, timeout=10, headers=None, delay=0):
-    """
-    URL에서 응답 텍스트(HTML)를 반환.
-
-    Args:
-        url: 요청할 URL
-        timeout: 요청 타임아웃 (초)
-        headers: 커스텀 헤더
-        delay: 요청 전 대기 시간 (초)
-
-    Returns:
-        응답 텍스트 (str)
-    """
+def fetch_text(url, timeout=DEFAULT_TIMEOUT, headers=None, delay=0):
+    """URL에서 응답 텍스트(HTML)를 반환."""
     if delay > 0:
         time.sleep(delay)
     hdrs = headers if headers is not None else HEADERS
-    response = requests.get(url, headers=hdrs, timeout=timeout)
+    response = _session.get(url, headers=hdrs, timeout=timeout)
     response.raise_for_status()
     return response.text
 
 
-def check_internet(url="https://www.google.com", timeout=3):
-    """
-    인터넷 연결 여부를 확인.
-
-    Returns:
-        True: 연결됨, False: 연결 안 됨
-    """
+def check_internet(url=INTERNET_CHECK_URL, timeout=INTERNET_CHECK_TIMEOUT):
+    """인터넷 연결 여부를 확인."""
     try:
-        requests.head(url, timeout=timeout, headers=HEADERS)
+        _session.head(url, timeout=timeout, headers=HEADERS)
         return True
     except requests.RequestException:
         return False
+
+
+# ─────────────────────────────────────────────
+# 공통: 기사 날짜 추출
+# ─────────────────────────────────────────────
+
+def fetch_article_dates(url):
+    """
+    네이버 개별 기사 페이지에서 작성일/수정일을 추출.
+
+    Returns:
+        (published_date, modified_date) or (None, None)
+    """
+    try:
+        soup = fetch_soup(url, delay=ARTICLE_DETAIL_DELAY)
+        date_elements = soup.find_all(class_="media_end_head_info_datestamp_time")
+
+        published_date = None
+        modified_date = None
+
+        if len(date_elements) >= 1:
+            published_date = date_elements[0].get_text(strip=True)
+        if len(date_elements) >= 2:
+            mod_el = soup.find(class_="_ARTICLE_MODIFY_DATE_TIME")
+            if mod_el:
+                modified_date = mod_el.get_text(strip=True)
+
+        return published_date, modified_date
+    except Exception:
+        return None, None

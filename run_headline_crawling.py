@@ -10,18 +10,11 @@ import os
 import datetime
 import time
 
-from http_utils import fetch_soup, log
-
-
-# 네이버 뉴스 섹션별 직접 URL (탭 클릭 대체)
-SECTIONS = {
-    "경제": "https://news.naver.com/section/101",
-    "IT/과학": "https://news.naver.com/section/105",
-    "세계": "https://news.naver.com/section/104",
-    "정치": "https://news.naver.com/section/100",
-    "사회": "https://news.naver.com/section/102",
-    "생활/문화": "https://news.naver.com/section/103",
-}
+from config import (
+    HEADLINES_DIR, NAVER_SECTIONS, SECTION_CRAWL_DELAY,
+    find_with_fallback, find_all_with_fallback,
+)
+from http_utils import fetch_soup, fetch_article_dates, log
 
 
 def crawl_section_headlines(section_name, section_url):
@@ -35,19 +28,12 @@ def crawl_section_headlines(section_name, section_url):
     try:
         soup = fetch_soup(section_url)
 
-        # 헤드라인 섹션 찾기
-        headline_section = soup.find("div", class_="section_component as_section_headline")
-        if headline_section is None:
-            headline_section = soup.find("div", class_=lambda c: c and "as_section_headline" in c)
-
+        headline_section = find_with_fallback(soup, "headline_section")
         if headline_section is None:
             log(f"  [{section_name}] 헤드라인 섹션을 찾을 수 없습니다.")
             return results
 
-        # 각 헤드라인 아이템 추출
-        items = headline_section.find_all("div", class_="sa_item")
-        if not items:
-            items = headline_section.find_all("li", class_="sa_item")
+        items = find_all_with_fallback(headline_section, "headline_items")
 
         for item in items:
             try:
@@ -88,32 +74,6 @@ def crawl_section_headlines(section_name, section_url):
     return results
 
 
-def fetch_article_dates(url):
-    """
-    개별 기사 페이지에서 작성일/수정일을 추출.
-
-    Returns:
-        (published_date, modified_date) or (None, None)
-    """
-    try:
-        soup = fetch_soup(url, delay=0.5)
-        date_elements = soup.find_all(class_="media_end_head_info_datestamp_time")
-
-        published_date = None
-        modified_date = None
-
-        if len(date_elements) >= 1:
-            published_date = date_elements[0].get_text(strip=True)
-        if len(date_elements) >= 2:
-            mod_el = soup.find(class_="_ARTICLE_MODIFY_DATE_TIME")
-            if mod_el:
-                modified_date = mod_el.get_text(strip=True)
-
-        return published_date, modified_date
-    except Exception:
-        return None, None
-
-
 def main():
     """
     헤드라인 크롤링 메인 함수.
@@ -125,8 +85,7 @@ def main():
     year = datetime.datetime.today().strftime('%Y')
     month = datetime.datetime.today().strftime('%m')
 
-    base_dir = os.path.join('C:\\news', 'headlines')
-    directory = os.path.join(base_dir, year, month)
+    directory = os.path.join(HEADLINES_DIR, year, month)
     os.makedirs(directory, exist_ok=True)
 
     headline_file_path = os.path.join(directory, f'{today}_헤드라인_모음.txt')
@@ -135,12 +94,12 @@ def main():
     all_headlines = []
     section_names = []
 
-    for section_name, section_url in SECTIONS.items():
+    for section_name, section_url in NAVER_SECTIONS.items():
         headlines = crawl_section_headlines(section_name, section_url)
         if headlines:
             section_names.append(section_name)
             all_headlines.extend(headlines)
-        time.sleep(1)
+        time.sleep(SECTION_CRAWL_DELAY)
 
     # 파일 작성
     with open(headline_file_path, 'w', encoding='utf-8') as file:

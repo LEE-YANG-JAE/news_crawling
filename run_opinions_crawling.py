@@ -12,17 +12,12 @@ import os
 import datetime
 import time
 
+from config import (
+    OPINIONS_DIR, TARGET_PRESS,
+    EDITORIAL_LIST_DELAY, EDITORIAL_DETAIL_DELAY,
+    find_with_fallback,
+)
 from http_utils import fetch_soup, log
-
-
-# 수집 대상 언론사 (이름 → 네이버 뉴스 officeId)
-TARGET_PRESS = {
-    '한국경제': '015',
-    '서울경제': '011',
-    '파이낸셜뉴스': '014',
-    '디지털타임스': '029',
-    '코리아중앙데일리': '640',
-}
 
 
 def fetch_editorial_list():
@@ -43,7 +38,7 @@ def fetch_editorial_list():
             )
             soup = fetch_soup(url)
 
-            editorial_list = soup.find(class_="opinion_editorial_list")
+            editorial_list = find_with_fallback(soup, "editorial_list")
             if editorial_list is None:
                 log(f"  [{press_name}] 사설 목록을 찾을 수 없습니다.")
                 continue
@@ -63,7 +58,7 @@ def fetch_editorial_list():
                     continue
 
             log(f"  [{press_name:10s}] {count}개 수집")
-            time.sleep(0.5)
+            time.sleep(EDITORIAL_LIST_DELAY)
 
         except Exception as e:
             log(f"  [{press_name}] 사설 수집 실패: {e}")
@@ -79,7 +74,7 @@ def fetch_editorial_content(url):
         dict or None
     """
     try:
-        soup = fetch_soup(url, delay=1)
+        soup = fetch_soup(url, delay=EDITORIAL_DETAIL_DELAY)
 
         title_el = soup.find(class_="media_end_head_headline")
         title = title_el.get_text(strip=True) if title_el else ""
@@ -95,11 +90,7 @@ def fetch_editorial_content(url):
             if mod_el:
                 modified_date = mod_el.get_text(strip=True)
 
-        body_el = soup.find(class_="_article_body")
-        if body_el is None:
-            body_el = soup.find(id="newsct_article")
-        if body_el is None:
-            body_el = soup.find(class_="newsct_article")
+        body_el = find_with_fallback(soup, "article_body")
         body = body_el.get_text(strip=True) if body_el else ""
 
         return {
@@ -125,11 +116,10 @@ def main():
     year = datetime.datetime.today().strftime('%Y')
     month = datetime.datetime.today().strftime('%m')
 
-    opinion_base_dir = os.path.join('C:\\news', 'opinions')
-    opinion_directory = os.path.join(opinion_base_dir, year, month)
-    os.makedirs(opinion_directory, exist_ok=True)
+    directory = os.path.join(OPINIONS_DIR, year, month)
+    os.makedirs(directory, exist_ok=True)
 
-    opinion_file_path = os.path.join(opinion_directory, f'{today}_사설 모음.txt')
+    opinion_file_path = os.path.join(directory, f'{today}_사설 모음.txt')
 
     # 1) 대상 언론사별 사설 목록 수집
     editorial_urls = fetch_editorial_list()

@@ -15,7 +15,8 @@ import datetime
 import time
 import re
 
-from http_utils import fetch_soup, FINVIZ_HEADERS, HEADERS, log
+from config import STOCK_NEWS_DIR, FINVIZ_HEADERS, FINVIZ_TIMEOUT
+from http_utils import fetch_soup, log
 
 
 def crawl_finviz_news():
@@ -30,7 +31,7 @@ def crawl_finviz_news():
         soup = fetch_soup(
             "https://finviz.com/news.ashx?v=3",
             headers=FINVIZ_HEADERS,
-            timeout=15,
+            timeout=FINVIZ_TIMEOUT,
         )
 
         news_div = soup.find(id="news")
@@ -116,7 +117,7 @@ def _fetch_from_finviz_page(url):
         (time_str, body_str) or (None, None) if parsing fails
     """
     try:
-        soup = fetch_soup(url, headers=FINVIZ_HEADERS, timeout=15, delay=1)
+        soup = fetch_soup(url, headers=FINVIZ_HEADERS, timeout=FINVIZ_TIMEOUT, delay=1)
         nc = soup.find(class_="news-content")
         if nc is None:
             return None, None
@@ -302,7 +303,7 @@ def main():
     year = datetime.datetime.today().strftime('%Y')
     month = datetime.datetime.today().strftime('%m')
 
-    base_dir = os.path.join('C:\\news', 'stock_news')
+    base_dir = STOCK_NEWS_DIR
     directory = os.path.join(base_dir, year, month)
     os.makedirs(directory, exist_ok=True)
 
