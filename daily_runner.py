@@ -22,6 +22,7 @@ import os
 import sys
 import time
 import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ─────────────────────────────────────────────
 # PyInstaller onefile 호환: _MEIPASS 경로를 sys.path에 추가
@@ -142,53 +143,43 @@ def main():
         results["영어 명언 수집"] = f"실패: {e}"
         log(f"  ✗ 영어 명언 수집 실패: {e}")
 
-    # ── [3/6] 헤드라인 크롤링 ──
+    # ── [3~6] 크롤러 병렬 실행 ──
     log("")
-    log("[3/6] 헤드라인 크롤링")
-    try:
-        import run_headline_crawling
-        headline_count = run_headline_crawling.main()
-        results["헤드라인"] = f"{headline_count}개 수집" if headline_count else "실패"
-        validate_count("헤드라인", headline_count, MIN_EXPECTED_HEADLINES)
-    except Exception as e:
-        results["헤드라인"] = f"실패: {e}"
-        log(f"  ✗ 헤드라인 크롤링 실패: {e}")
+    log("[3~6] 크롤러 4개 병렬 실행")
 
-    # ── [4/6] 경제 뉴스 크롤링 ──
-    log("")
-    log("[4/6] 경제 뉴스 크롤링")
-    try:
-        import run_economics_crawling
-        economics_count = run_economics_crawling.main()
-        results["경제 뉴스"] = f"{economics_count}개 수집" if economics_count else "실패"
-        validate_count("경제 뉴스", economics_count, MIN_EXPECTED_ECONOMICS)
-    except Exception as e:
-        results["경제 뉴스"] = f"실패: {e}"
-        log(f"  ✗ 경제 뉴스 크롤링 실패: {e}")
+    import run_headline_crawling
+    import run_economics_crawling
+    import run_opinions_crawling
+    import run_eng_stock_check
 
-    # ── [5/6] 사설 크롤링 ──
-    log("")
-    log("[5/6] 사설 크롤링")
-    try:
-        import run_opinions_crawling
-        opinions_count = run_opinions_crawling.main()
-        results["사설"] = f"{opinions_count}개 수집" if opinions_count else "실패"
-        validate_count("사설", opinions_count, MIN_EXPECTED_OPINIONS)
-    except Exception as e:
-        results["사설"] = f"실패: {e}"
-        log(f"  ✗ 사설 크롤링 실패: {e}")
+    crawlers = [
+        ("헤드라인", run_headline_crawling.main, MIN_EXPECTED_HEADLINES),
+        ("경제 뉴스", run_economics_crawling.main, MIN_EXPECTED_ECONOMICS),
+        ("사설", run_opinions_crawling.main, MIN_EXPECTED_OPINIONS),
+        ("영문 주식 뉴스", run_eng_stock_check.main, MIN_EXPECTED_STOCK_NEWS),
+    ]
 
-    # ── [6/6] 영문 주식 뉴스 크롤링 ──
-    log("")
-    log("[6/6] 영문 주식 뉴스 크롤링")
-    try:
-        import run_eng_stock_check
-        stock_count = run_eng_stock_check.main()
-        results["영문 주식 뉴스"] = f"{stock_count}개 수집" if stock_count else "실패"
-        validate_count("영문 주식 뉴스", stock_count, MIN_EXPECTED_STOCK_NEWS)
-    except Exception as e:
-        results["영문 주식 뉴스"] = f"실패: {e}"
-        log(f"  ✗ 영문 주식 뉴스 크롤링 실패: {e}")
+    def _run_crawler(name, func, min_expected):
+        """단일 크롤러 실행 래퍼. (name, result_str, count) 반환."""
+        try:
+            count = func()
+            result_str = f"{count}개 수집" if count else "실패"
+            return name, result_str, count, min_expected
+        except Exception as e:
+            return name, f"실패: {e}", None, min_expected
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {
+            executor.submit(_run_crawler, name, func, min_exp): name
+            for name, func, min_exp in crawlers
+        }
+        for future in as_completed(futures):
+            name, result_str, count, min_exp = future.result()
+            results[name] = result_str
+            if count is not None:
+                validate_count(name, count, min_exp)
+            elif "실패" in result_str:
+                log(f"  ✗ {name} 크롤링 실패: {result_str}")
 
     # ── 바탕화면 바로가기 ──
     shortcut_ok = create_news_shortcut()

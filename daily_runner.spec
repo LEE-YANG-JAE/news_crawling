@@ -22,9 +22,9 @@ entry_script = 'daily_runner.py'
 # 동적 import되는 모듈을 명시적으로 지정
 hidden_imports = [
     # 프로젝트 내부 모듈
+    'config',
     'http_utils',
     'crawling_english_saying',
-    'run_combined',
     'run_headline_crawling',
     'run_economics_crawling',
     'run_opinions_crawling',
@@ -56,9 +56,9 @@ hidden_imports = [
 # onefile 모드에서는 _MEIPASS 임시 폴더에 풀림
 # daily_runner.py 내 sys.path 설정으로 import 가능
 added_data = [
+    ('config.py', '.'),
     ('http_utils.py', '.'),
     ('crawling_english_saying.py', '.'),
-    ('run_combined.py', '.'),
     ('run_headline_crawling.py', '.'),
     ('run_economics_crawling.py', '.'),
     ('run_opinions_crawling.py', '.'),
