@@ -11,11 +11,11 @@ import datetime
 import time
 from difflib import SequenceMatcher
 
-from config import (
+from core.config import (
     ECONOMICS_DIR, NAVER_ECONOMICS_URL, SECTION_CRAWL_DELAY,
     find_with_fallback,
 )
-from http_utils import fetch_soup, fetch_article_dates, log
+from core.http_utils import fetch_soup, fetch_article_dates, log
 
 
 def are_similar(str1, str2, threshold=0.8):

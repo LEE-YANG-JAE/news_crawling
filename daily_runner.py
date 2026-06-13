@@ -24,22 +24,14 @@ import time
 import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# ─────────────────────────────────────────────
-# PyInstaller onefile 호환: _MEIPASS 경로를 sys.path에 추가
-# EXE 실행 시 번들된 모듈을 임시 폴더에서 찾을 수 있도록 함
-# ─────────────────────────────────────────────
-if getattr(sys, 'frozen', False):
-    bundle_dir = sys._MEIPASS
-    if bundle_dir not in sys.path:
-        sys.path.insert(0, bundle_dir)
-
-from config import (
-    NEWS_DIR, LOGS_DIR,
+from core.config import (
+    CONFIG_PATH, NEWS_DIR, LOGS_DIR,
+    QUOTES_DIR, HEADLINES_DIR, ECONOMICS_DIR, OPINIONS_DIR, STOCK_NEWS_DIR,
     INTERNET_MAX_RETRIES, INTERNET_RETRY_INTERVAL,
     MIN_EXPECTED_HEADLINES, MIN_EXPECTED_ECONOMICS,
     MIN_EXPECTED_OPINIONS, MIN_EXPECTED_STOCK_NEWS,
 )
-from http_utils import check_internet, log, setup_file_logging
+from core.http_utils import check_internet, log, setup_file_logging
 
 
 # ─────────────────────────────────────────────
@@ -121,6 +113,17 @@ def main():
     log(f"  시작: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     log("=" * 60)
 
+    # ── 저장 경로 안내 (오늘 수집분이 쌓이는 위치) ──
+    log("")
+    log("[저장 경로]")
+    log(f"  설정(config.json) : {CONFIG_PATH}")
+    log(f"  영어 명언 : {os.path.join(QUOTES_DIR, f'{year}년 영어 명언 모음.txt')}")
+    log(f"  헤드라인  : {os.path.join(HEADLINES_DIR, year, month)}")
+    log(f"  경제 뉴스 : {os.path.join(ECONOMICS_DIR, year, month)}")
+    log(f"  사설      : {os.path.join(OPINIONS_DIR, year, month)}")
+    log(f"  주식 뉴스 : {os.path.join(STOCK_NEWS_DIR, year, month)}")
+    log(f"  실행 로그 : {log_path}")
+
     results = {}
 
     # ── [1/6] 인터넷 연결 확인 ──
@@ -136,7 +139,7 @@ def main():
     log("")
     log("[2/6] 영어 명언 수집")
     try:
-        import crawling_english_saying
+        from core import crawling_english_saying
         success = crawling_english_saying.insert_latest_quote()
         results["영어 명언 수집"] = "성공" if success else "실패"
     except Exception as e:
@@ -147,10 +150,10 @@ def main():
     log("")
     log("[3~6] 크롤러 4개 병렬 실행")
 
-    import run_headline_crawling
-    import run_economics_crawling
-    import run_opinions_crawling
-    import run_eng_stock_check
+    from core import run_headline_crawling
+    from core import run_economics_crawling
+    from core import run_opinions_crawling
+    from core import run_eng_stock_check
 
     crawlers = [
         ("헤드라인", run_headline_crawling.main, MIN_EXPECTED_HEADLINES),

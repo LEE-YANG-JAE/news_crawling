@@ -1,7 +1,8 @@
 """
 Hackers영어 '오늘의 한줄 영어명언' 크롤링 스크립트.
 
-바탕화면의 `{YYYY}년 영어 명언 모음.txt` 파일에 최신 명언을 추가.
+저장 폴더(config.json 의 quotes_dir, 기본값=바탕화면)의
+`{YYYY}년 영어 명언 모음.txt` 파일에 최신 명언을 추가.
 파일이 없으면 자동으로 새 파일을 생성.
 
 Usage:
@@ -12,6 +13,8 @@ import os
 import re
 from datetime import datetime
 from typing import Optional, Tuple
+
+from core.config import QUOTES_DIR
 
 try:
     from bs4 import BeautifulSoup  # type: ignore
@@ -46,7 +49,7 @@ def fetch_latest_quote() -> Optional[Tuple[str, str, str]]:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except Exception as exc:
-        from http_utils import log
+        from core.http_utils import log
         log(f"  ✗ 사이트 접속 실패: {exc}")
         return None
 
@@ -82,24 +85,27 @@ def fetch_latest_quote() -> Optional[Tuple[str, str, str]]:
     if date and english_quote and korean_quote:
         return date, english_quote, korean_quote
 
-    from http_utils import log
+    from core.http_utils import log
     log("  ✗ 페이지에서 명언 정보를 찾을 수 없습니다.")
     return None
 
 
 def create_new_file(file_path: str, year: int) -> None:
     """
-    연초에 파일이 없을 때 새 파일을 자동 생성.
+    연초/최초 실행 시 파일이 없을 때 새 파일을 자동 생성.
+
+    저장 폴더(config.json 의 quotes_dir)가 없으면 생성한다.
 
     Args:
         file_path: 생성할 파일 경로
         year: 연도
     """
-    # 바탕화면 디렉토리가 없으면 생성하지 않음 (Desktop은 이미 존재해야 함)
-    from http_utils import log
-    desktop_dir = os.path.dirname(file_path)
-    if not os.path.isdir(desktop_dir):
-        log(f"  ✗ 바탕화면 경로를 찾을 수 없습니다: {desktop_dir}")
+    from core.http_utils import log
+    target_dir = os.path.dirname(file_path)
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+    except Exception as exc:
+        log(f"  ✗ 저장 폴더를 만들 수 없습니다: {target_dir} ({exc})")
         return
 
     header = f"{year}년 영어 명언 모음\n\n"
@@ -124,10 +130,9 @@ def insert_latest_quote() -> bool:
     year = datetime.now().year
     filename = f"{year}년 영어 명언 모음.txt"
 
-    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-    file_path = os.path.join(desktop_path, filename)
+    file_path = os.path.join(QUOTES_DIR, filename)
 
-    from http_utils import log
+    from core.http_utils import log
 
     # 파일이 없으면 자동 생성
     if not os.path.isfile(file_path):

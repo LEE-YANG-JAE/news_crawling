@@ -12,12 +12,12 @@ import os
 import datetime
 import time
 
-from config import (
+from core.config import (
     OPINIONS_DIR, TARGET_PRESS,
     EDITORIAL_LIST_DELAY, EDITORIAL_DETAIL_DELAY,
     find_with_fallback,
 )
-from http_utils import fetch_soup, log
+from core.http_utils import fetch_soup, log
 
 
 def fetch_editorial_list():

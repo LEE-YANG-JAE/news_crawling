@@ -15,8 +15,8 @@ import datetime
 import time
 import re
 
-from config import STOCK_NEWS_DIR, FINVIZ_HEADERS, FINVIZ_TIMEOUT
-from http_utils import fetch_soup, log
+from core.config import STOCK_NEWS_DIR, FINVIZ_HEADERS, FINVIZ_TIMEOUT
+from core.http_utils import fetch_soup, log
 
 
 def crawl_finviz_news():

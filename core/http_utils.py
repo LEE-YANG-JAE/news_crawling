@@ -12,7 +12,7 @@ from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 
-from config import (
+from core.config import (
     HEADERS, FINVIZ_HEADERS,
     DEFAULT_TIMEOUT, RETRY_COUNT, RETRY_BACKOFF,
     INTERNET_CHECK_URL, INTERNET_CHECK_TIMEOUT,

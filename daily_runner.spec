@@ -21,14 +21,15 @@ entry_script = 'daily_runner.py'
 
 # 동적 import되는 모듈을 명시적으로 지정
 hidden_imports = [
-    # 프로젝트 내부 모듈
-    'config',
-    'http_utils',
-    'crawling_english_saying',
-    'run_headline_crawling',
-    'run_economics_crawling',
-    'run_opinions_crawling',
-    'run_eng_stock_check',
+    # 프로젝트 내부 모듈 (core 패키지)
+    'core',
+    'core.config',
+    'core.http_utils',
+    'core.crawling_english_saying',
+    'core.run_headline_crawling',
+    'core.run_economics_crawling',
+    'core.run_opinions_crawling',
+    'core.run_eng_stock_check',
     # requests 관련
     'requests',
     'urllib3',
@@ -52,18 +53,9 @@ hidden_imports = [
     'json',
 ]
 
-# 번들할 데이터 파일: 내부 Python 모듈들
-# onefile 모드에서는 _MEIPASS 임시 폴더에 풀림
-# daily_runner.py 내 sys.path 설정으로 import 가능
-added_data = [
-    ('config.py', '.'),
-    ('http_utils.py', '.'),
-    ('crawling_english_saying.py', '.'),
-    ('run_headline_crawling.py', '.'),
-    ('run_economics_crawling.py', '.'),
-    ('run_opinions_crawling.py', '.'),
-    ('run_eng_stock_check.py', '.'),
-]
+# core 패키지 모듈은 위 hidden_imports 로 PYZ(바이트코드)에 포함되므로
+# 별도 데이터 파일 번들이 필요 없다.
+added_data = []
 
 a = Analysis(
     [entry_script],

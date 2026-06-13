@@ -10,11 +10,11 @@ import os
 import datetime
 import time
 
-from config import (
+from core.config import (
     HEADLINES_DIR, NAVER_SECTIONS, SECTION_CRAWL_DELAY,
     find_with_fallback, find_all_with_fallback,
 )
-from http_utils import fetch_soup, fetch_article_dates, log
+from core.http_utils import fetch_soup, fetch_article_dates, log
 
 
 def crawl_section_headlines(section_name, section_url):
